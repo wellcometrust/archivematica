@@ -11,13 +11,13 @@ from main import models
 
 from job import Job
 
-import create_mets_v2
 import metsrw
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 FIXTURES_DIR = os.path.join(THIS_DIR, 'fixtures')
 sys.path.append(os.path.abspath(os.path.join(THIS_DIR, '../lib/clientScripts')))
 import archivematicaCreateMETSReingest
+import create_mets_v2
 
 NSMAP = {
     'dc': 'http://purl.org/dc/elements/1.1/',

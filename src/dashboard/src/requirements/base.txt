@@ -16,7 +16,7 @@ gunicorn==19.7.1
 futures==3.0.5  # used by gunicorn's async workers
 lazy-paged-sequence
 lxml==3.5.0
-metsrw==0.2.1
+git+https://github.com/artefactual-labs/mets-reader-writer.git@dev/issue-24-handle-old-aips#egg=metsrw
 mysqlclient==1.3.7
 pytz
 pyopenssl
