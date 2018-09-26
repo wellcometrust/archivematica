@@ -446,16 +446,22 @@ def list_display(request):
     aip_indexed_file_count = aip_file_count(es_client)
 
     # get AIPs
-    order_by = request.GET.get('order_by', 'name_unanalyzed')
+    order_by = request.GET.get('order_by', 'name')
     sort_by = request.GET.get('sort_by', 'up')
 
-    if sort_by == 'down':
-        sort_direction = 'desc'
-    else:
-        sort_direction = 'asc'
-
-    sort_specification = order_by + ':' + sort_direction
     sort_params = 'order_by=' + order_by + '&sort_by=' + sort_by
+
+    # use raw subfield to sort by name
+    if order_by == 'name':
+        order_by = order_by + '.raw'
+
+    # change sort_by param to ES sort directions
+    if sort_by == 'down':
+        sort_by = 'desc'
+    else:
+        sort_by = 'asc'
+
+    sort_specification = order_by + ':' + sort_by
 
     # get list of UUIDs of AIPs that are deleted or pending deletion
     aips_deleted_or_pending_deletion = []
