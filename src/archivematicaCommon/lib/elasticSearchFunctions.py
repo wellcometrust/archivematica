@@ -85,8 +85,7 @@ BACKLOG_FILTER = {
 }
 
 MACHINE_READABLE_FIELD_SPEC = {
-    'type': 'string',
-    'index': 'not_analyzed'
+    'type': 'keyword',
 }
 
 
@@ -274,15 +273,11 @@ def create_index(client, index, attempt=1):
     create_index(client, index, attempt + 1)
 
 
-def _sortable_string_field_specification(field_name):
+def _sortable_string_field_specification():
     return {
-        'type': 'multi_field',
+        'type': 'text',
         'fields': {
-            field_name: {'type': 'string'},
-            field_name + '_unanalyzed': {
-                'type': 'string',
-                'index': 'not_analyzed'
-            }
+            'raw': {'type': 'keyword'},
         }
     }
 
@@ -300,7 +295,7 @@ def set_up_mapping_aip_index(client):
         aipfile_mets_mapping = json.load(f)
 
     mapping = {
-        'name': _sortable_string_field_specification('name'),
+        'name': _sortable_string_field_specification(),
         'size': {'type': 'double'},
         'uuid': MACHINE_READABLE_FIELD_SPEC,
         'mets': aip_mets_mapping,
@@ -319,11 +314,11 @@ def set_up_mapping_aip_index(client):
         'FILEUUID': MACHINE_READABLE_FIELD_SPEC,
         'isPartOf': MACHINE_READABLE_FIELD_SPEC,
         'AICID': MACHINE_READABLE_FIELD_SPEC,
-        'sipName': {'type': 'string'},
+        'sipName': {'type': 'text'},
         'indexedAt': {'type': 'double'},
-        'filePath': {'type': 'string'},
-        'fileExtension': {'type': 'string'},
-        'origin': {'type': 'string'},
+        'filePath': {'type': 'text'},
+        'fileExtension': {'type': 'text'},
+        'origin': {'type': 'text'},
         'identifiers': MACHINE_READABLE_FIELD_SPEC,
         'METS': aipfile_mets_mapping,
     }
@@ -339,8 +334,8 @@ def set_up_mapping_aip_index(client):
 
 def set_up_mapping_transfer_index(client):
     transferfile_mapping = {
-        'filename': {'type': 'string'},
-        'relative_path': {'type': 'string'},
+        'filename': {'type': 'text'},
+        'relative_path': {'type': 'text'},
         'fileuuid': MACHINE_READABLE_FIELD_SPEC,
         'sipuuid': MACHINE_READABLE_FIELD_SPEC,
         'accessionid': MACHINE_READABLE_FIELD_SPEC,
@@ -363,8 +358,8 @@ def set_up_mapping_transfer_index(client):
             'type': 'nested',
             'properties': {
                 'puid': MACHINE_READABLE_FIELD_SPEC,
-                'format': {'type': 'string'},
-                'group': {'type': 'string'},
+                'format': {'type': 'text'},
+                'group': {'type': 'text'},
             }
         }
     }
@@ -376,8 +371,8 @@ def set_up_mapping_transfer_index(client):
     logger.info('Transfer file mapping created.')
 
     transfer_mapping = {
-        'name': {'type': 'string'},
-        'status': {'type': 'string'},
+        'name': {'type': 'text'},
+        'status': {'type': 'text'},
         'ingest_date': {'type': 'date', 'format': 'dateOptionalTime'},
         'file_count': {'type': 'integer'},
         'uuid': MACHINE_READABLE_FIELD_SPEC,
