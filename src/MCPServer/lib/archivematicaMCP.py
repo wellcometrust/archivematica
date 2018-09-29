@@ -169,7 +169,7 @@ def createUnitAndJobChain(path, watched_dir, workflow):
             unit = unitFile(path, UUID)
     else:
         return
-    jobChain(unit, watched_dir.chain.id)
+    jobChain(unit, watched_dir.chain, workflow)
 
 
 def createUnitAndJobChainThreaded(path, watched_dir, workflow):

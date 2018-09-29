@@ -228,6 +228,7 @@ class RPCServer(GearmanWorker):
             payload.get("access_system_id"),
             payload.get("path"),
             payload.get("metadata_set_id"),
+            self.workflow,
         )
         kwargs = {
             "auto_approve": payload.get("auto_approve"),

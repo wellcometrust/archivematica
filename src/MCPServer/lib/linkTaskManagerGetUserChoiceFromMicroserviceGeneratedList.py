@@ -29,7 +29,7 @@ from linkTaskManager import LinkTaskManager
 from linkTaskManagerChoice import choicesAvailableForUnits, choicesAvailableForUnitsLock
 
 from dicts import ReplacementDict, ChoicesDict
-from main.models import StandardTaskConfig, UserProfile, Job
+from main.models import UserProfile, Job
 
 from django.conf import settings as django_settings
 
@@ -37,34 +37,11 @@ LOGGER = logging.getLogger('archivematica.mcp.server')
 
 
 class linkTaskManagerGetUserChoiceFromMicroserviceGeneratedList(LinkTaskManager):
-    def __init__(self, jobChainLink, pk, unit):
-        super(linkTaskManagerGetUserChoiceFromMicroserviceGeneratedList, self).__init__(jobChainLink, pk, unit)
-        self.choices = []
-        stc = StandardTaskConfig.objects.get(id=str(pk))
-        key = stc.execute
+    def __init__(self, jobChainLink, unit):
+        super(linkTaskManagerGetUserChoiceFromMicroserviceGeneratedList,
+              self).__init__(jobChainLink, unit)
 
-        choiceIndex = 0
-        if isinstance(self.jobChainLink.passVar, list):
-            for item in self.jobChainLink.passVar:
-                LOGGER.debug('%s is ChoicesDict: %s', item, isinstance(item, ChoicesDict))
-                if isinstance(item, ChoicesDict):
-                    # For display, convert the ChoicesDict passVar into a list
-                    # of tuples: (index, description, replacement dict string)
-                    for description, value in item.items():
-                        replacementDic_ = str({key: value})
-                        self.choices.append((choiceIndex, description, replacementDic_))
-                        choiceIndex += 1
-                    break
-            else:
-                LOGGER.error("ChoicesDict not found in passVar: %s", self.jobChainLink.passVar)
-                raise Exception("ChoicesDict not found in passVar: {}".format(self.jobChainLink.passVar))
-        else:
-            LOGGER.error("passVar is %s instead of expected list",
-                         type(self.jobChainLink.passVar))
-            raise Exception("passVar is {} instead of expected list".format(
-                type(self.jobChainLink.passVar)))
-
-        LOGGER.info('Choices: %s', self.choices)
+        self._populate_choices()
 
         preConfiguredIndex = self.checkForPreconfiguredXML()
         if preConfiguredIndex is not None:
@@ -75,6 +52,32 @@ class linkTaskManagerGetUserChoiceFromMicroserviceGeneratedList(LinkTaskManager)
             self.jobChainLink.setExitMessage(Job.STATUS_AWAITING_DECISION)
             choicesAvailableForUnits[self.jobChainLink.UUID] = self
             choicesAvailableForUnitsLock.release()
+
+    def _populate_choices(self):
+        self.choices = []
+        if not isinstance(self.jobChainLink.passVar, list):
+            errmsg = "passVar is {} instead of expected list".format(
+                type(self.jobChainLink.passVar))
+            LOGGER.error(errmsg)
+            raise Exception(errmsg)
+        key = self.jobChainLink.link.config["execute"]
+        index = 0
+        for item in self.jobChainLink.passVar:
+            LOGGER.debug('%s is ChoicesDict: %s',
+                         item, isinstance(item, ChoicesDict))
+            if isinstance(item, ChoicesDict):
+                # For display, convert the ChoicesDict passVar into a list
+                # of tuples: (index, description, replacement dict string)
+                for description, value in item.items():
+                    self.choices.append(
+                        (index, description, str({key: value})))
+                    index += 1
+                break
+        else:
+            errmsg = "ChoicesDict not found in passVar: {}".format(
+                self.jobChainLink.passVar)
+            LOGGER.error(errmsg)
+            raise Exception(errmsg)
 
     def checkForPreconfiguredXML(self):
         """ Check the processing XML file for a pre-selected choice.

@@ -101,18 +101,3 @@ class unit:
                 microservicechainlink_id=microServiceChainLink
             )
             var.save()
-
-    # NOTE: variableValue argument is currently unused.
-    def getmicroServiceChainLink(self, variable, variableValue, defaultMicroServiceChainLink):
-        """Attempt to look up next chain link in UnitVariable.
-
-        It returns a MicroServiceChainLink.
-        """
-        LOGGER.debug('Fetching MicroServiceChainLink for %s (default %s)', variable, defaultMicroServiceChainLink)
-        try:
-            var = UnitVariable.objects.get(unittype=self.unitType,
-                                           unituuid=self.UUID,
-                                           variable=variable)
-            return var.microservicechainlink
-        except UnitVariable.DoesNotExist:
-            return defaultMicroServiceChainLink
