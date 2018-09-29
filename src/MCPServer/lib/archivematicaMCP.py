@@ -44,7 +44,6 @@ import time
 import uuid
 
 import django
-django.setup()
 from django.conf import settings as django_settings
 from django.db.models import Q
 from django.utils import six
@@ -63,19 +62,25 @@ from unitDIP import unitDIP
 from unitFile import unitFile
 from unitTransfer import unitTransfer
 from utils import isUUID
+from workflow import load as load_workflow
 import RPCServer
 
 from archivematicaFunctions import unicodeToStr
 from databaseFunctions import auto_close_db, createSIP, getUTCDate
 import dicts
 
-from main.models import Job, SIP, Task, WatchedDirectory
+from main.models import Job, SIP, Task
 
 
 # time to sleep to allow db to be updated with the new location of a SIP
 dbWaitSleep = 2
 
 stopSignalReceived = False  # Tracks whether a sigkill has been received or not
+
+ASSETS_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(os.path.join(__file__))), "assets")
+
+DEFAULT_WORKFLOW = os.path.join(ASSETS_DIR, "workflow.json")
 
 
 def fetchUUIDFromPath(path):
@@ -137,23 +142,26 @@ def findOrCreateSipInDB(path, waitSleep=dbWaitSleep, unit_type='SIP'):
 
 @log_exceptions
 @auto_close_db
-def createUnitAndJobChain(path, config, terminate=False):
+def createUnitAndJobChain(path, watched_dir, workflow):
     path = unicodeToStr(path)
     if os.path.isdir(path):
         path = path + "/"
-    logger.debug('Creating unit and job chain for %s with %s', path, config)
+    logger.debug('Starting chain for %s', path)
+    if not os.path.exists(path):
+        return
     unit = None
+    unit_type = watched_dir["unit_type"]
     if os.path.isdir(path):
-        if config[3] == "SIP":
+        if unit_type == "SIP":
             UUID = findOrCreateSipInDB(path)
             unit = unitSIP(path, UUID)
-        elif config[3] == "DIP":
+        elif unit_type == "DIP":
             UUID = findOrCreateSipInDB(path, unit_type='DIP')
             unit = unitDIP(path, UUID)
-        elif config[3] == "Transfer":
+        elif unit_type == "Transfer":
             unit = unitTransfer(path)
     elif os.path.isfile(path):
-        if config[3] == "Transfer":
+        if unit_type == "Transfer":
             unit = unitTransfer(path)
         else:
             return
@@ -161,33 +169,23 @@ def createUnitAndJobChain(path, config, terminate=False):
             unit = unitFile(path, UUID)
     else:
         return
-    jobChain(unit, config[1])
-
-    if terminate:
-        exit(0)
+    jobChain(unit, watched_dir.chain.id)
 
 
-def createUnitAndJobChainThreaded(path, config, terminate=True):
+def createUnitAndJobChainThreaded(path, watched_dir, workflow):
     try:
         logger.debug('Watching path %s', path)
-        Executor.apply_async(createUnitAndJobChain, [path, config], {"terminate": terminate})
+        Executor.apply_async(
+            createUnitAndJobChain, [path, watched_dir, workflow])
     except Exception:
         logger.exception('Error creating threads to watch directories')
 
 
-def watchDirectories():
-    """Start watching the watched directories defined in the WatchedDirectories table in the database."""
-    watched_dir_path = django_settings.WATCH_DIRECTORY
-    interval = django_settings.WATCH_DIRECTORY_INTERVAL
-
-    watched_directories = WatchedDirectory.objects.all()
-
-    for watched_directory in watched_directories:
-        directory = watched_directory.watched_directory_path.replace("%watchDirectoryPath%", watched_dir_path, 1)
-
-        # Tuple of variables that may be used by a callback
-        row = (watched_directory.watched_directory_path, watched_directory.chain_id, watched_directory.only_act_on_directories, watched_directory.expected_type.description)
-
+def watchDirectories(workflow):
+    """Start watching the watched directories defined in the workflow."""
+    for watched_dir in workflow.get_wdirs():
+        directory = os.path.join(
+            django_settings.WATCH_DIRECTORY, watched_dir.path.lstrip("/"))
         if not os.path.isdir(directory):
             os.makedirs(directory)
         for item in os.listdir(directory):
@@ -197,17 +195,13 @@ def watchDirectories():
             if isinstance(item, six.binary_type):
                 item = item.decode("utf-8")
             path = os.path.join(six.text_type(directory), item)
-            createUnitAndJobChainThreaded(path, row, terminate=False)
-        actOnFiles = True
-        if watched_directory.only_act_on_directories:
-            actOnFiles = False
+            createUnitAndJobChainThreaded(path, watched_dir, workflow)
         watchDirectory.archivematicaWatchDirectory(
             directory,
-            variablesAdded=row,
+            variablesAdded=(watched_dir, workflow),
             callBackFunctionAdded=createUnitAndJobChainThreaded,
-            alertOnFiles=actOnFiles,
-            interval=interval,
-        )
+            alertOnFiles=not watched_dir["only_dirs"],
+            interval=django_settings.WATCH_DIRECTORY_INTERVAL)
 
 
 def signal_handler(signalReceived, frame):
@@ -359,6 +353,7 @@ def _except_hook_log_everything(exc_type, exc_value, exc_traceback):
 
 if __name__ == '__main__':
     logger = logging.getLogger("archivematica.mcp.server")
+    django.setup()
 
     # Replace exception handler with one that logs exceptions
     sys.excepthook = _except_hook_log_everything
@@ -370,6 +365,9 @@ if __name__ == '__main__':
     logger.info('User: %s', getpass.getuser())
 
     start_prometheus_http_server(django_settings.PROMETHEUS_HTTP_SERVER)
+
+    with open(DEFAULT_WORKFLOW) as fp:
+        workflow = load_workflow(fp)
 
     dicts.setup(
         shared_directory=django_settings.SHARED_DIRECTORY,
@@ -392,7 +390,7 @@ if __name__ == '__main__':
     TaskGroupRunner.init()
 
     cleanupOldDbEntriesOnNewRun()
-    watchDirectories()
+    watchDirectories(workflow)
 
     # This is blocking the main thread with the worker loop
     RPCServer.startRPCServer()
