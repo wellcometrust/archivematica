@@ -393,4 +393,4 @@ if __name__ == '__main__':
     watchDirectories(workflow)
 
     # This is blocking the main thread with the worker loop
-    RPCServer.startRPCServer()
+    RPCServer.start(workflow)
