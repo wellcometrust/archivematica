@@ -49,7 +49,7 @@ class linkTaskManagerUnitVariableLinkPull(LinkTaskManager):
         except UnitVariable.DoesNotExist:
             link_id = link.config["chain_id"]
         else:
-            link_id = unitvar.microservicechainlink.pk
+            link_id = unitvar.microservicechainlink
         try:
             link = self.jobChainLink.workflow.get_link(link_id)
         except KeyError:

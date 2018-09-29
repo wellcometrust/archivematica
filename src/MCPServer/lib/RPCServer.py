@@ -21,6 +21,7 @@ We have plans to replace this server with gRPC.
 # You should have received a copy of the GNU General Public License
 # along with Archivematica.  If not, see <http://www.gnu.org/licenses/>.
 
+import calendar
 import cPickle
 import inspect
 import logging
@@ -29,6 +30,7 @@ import re
 import time
 
 from django.conf import settings as django_settings
+from django.db import connection
 from django.utils.six.moves import configparser
 from django.utils.six import StringIO
 from gearman import GearmanWorker
@@ -36,10 +38,13 @@ from gearman.errors import ServerUnavailable
 from lxml import etree
 
 from databaseFunctions import auto_close_db
-from linkTaskManagerChoice import choicesAvailableForUnits
+from linkTaskManagerChoice import (
+    choicesAvailableForUnits,
+    choicesAvailableForUnitsLock,
+)
 from package import create_package, get_approve_transfer_chain_id
 from processing_config import get_processing_fields
-from main.models import Job
+from main.models import Job, SIP, Transfer
 
 
 logger = logging.getLogger("archivematica.mcp.server.rpcserver")
@@ -248,7 +253,7 @@ class RPCServer(GearmanWorker):
         """
         db_transfer_path = payload.get("db_transfer_path")
         transfer_type = payload.get("transfer_type", "standard")
-        user_id = payload.get("user_id")
+        user_id = payload.get("uid")
         job = Job.objects.filter(
             directory=db_transfer_path,
             currentstep=Job.STATUS_AWAITING_DECISION
@@ -306,6 +311,118 @@ class RPCServer(GearmanWorker):
         raise_exc = no
         """
         return get_processing_fields(self.workflow)
+
+    def _units_statuses_handler(self, worker, job, payload):
+        """Returns the status of units that are of type SIP or Transfer.
+
+        It returns a JSON-encoded objects. Its ``objects`` attribute is an
+        array of objects, each of which represents a single unit. Each unit
+        has a ``jobs`` attribute shoe value is an array of objects, each of
+        which represents a job of the unit.
+
+        [config]
+        name = getUnitsStatuses
+        raise_exc = no
+        """
+        unit_types = {
+            "SIP": (SIP, "unitSIP"),
+            "Transfer": (Transfer, "unitTransfer"),
+        }
+        try:
+            model_attrs = unit_types[payload["type"]]
+            lang = payload["lang"]
+        except KeyError as err:
+            raise UnexpectedPayloadError("Missing parameter: {}".format(err))
+        model = model_attrs[0]
+        sql = """
+        SELECT SIPUUID,
+               MAX(UNIX_TIMESTAMP(createdTime) + createdTimeDec) AS timestamp
+            FROM Jobs
+            WHERE unitType=%s AND NOT SIPUUID LIKE '%%None%%'
+            GROUP BY SIPUUID;"""
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (model_attrs[1],))
+            sipuuids_and_timestamps = cursor.fetchall()
+        # This is a shared data structure, read safely.
+        with choicesAvailableForUnitsLock:
+            jobs_awaiting_for_approval = choicesAvailableForUnits.copy()
+        objects = []
+        for unit_id, timestamp in sipuuids_and_timestamps:
+            item = {
+                # TODO: consolidate this!
+                "id": unit_id, "uuid": unit_id,
+                "timestamp": float(timestamp),
+                "jobs": [],
+            }
+            # Check if hidden (TODO: this method is slow)
+            if model.objects.is_hidden(unit_id):
+                continue
+            jobs = Job.objects.filter(sipuuid=unit_id).order_by("-createdtime")
+            if jobs:
+                item["directory"] = jobs[0].get_directory_name()
+            # Embed accession ID in status data (for DRMC customization)
+            if isinstance(model, Transfer):
+                try:
+                    trfs = Transfer.objects.filter(
+                        file__sip_id=item["uuid"]).distinct()
+                    if trfs:
+                        item["access_system_id"] = trfs[0].access_system_id
+                except Exception:
+                    pass
+            # Append jobs
+            for job_ in jobs:
+                try:
+                    link = self.workflow.get_link(job_.microservicechainlink)
+                except KeyError:
+                    continue
+                new_job = {}
+                new_job["uuid"] = job_.jobuuid
+                new_job["link_id"] = job_.microservicechainlink
+                new_job["currentstep"] = job_.currentstep
+                new_job["timestamp"] = "%d.%s" % (
+                    calendar.timegm(job_.createdtime.timetuple()),
+                    str(job_.createdtimedec).split(".")[-1])
+                new_job["microservicegroup"] = link.get_label("group", lang)
+                new_job["type"] = link.get_label("description", lang)
+                try:
+                    new_job["choices"] = _pull_choices(
+                        job_.jobuuid, lang, jobs_awaiting_for_approval)
+                except JobNotWaitingForApprovalError:
+                    pass
+                item["jobs"].append(new_job)
+            objects.append(item)
+        return objects
+
+
+class JobNotWaitingForApprovalError(Exception):
+    """When a job is not waiting for a decision to be made."""
+
+
+def _pull_choices(job_id, lang, jobs_awaiting_for_approval):
+    """Look up choices available in a job awaiting for approval.
+
+    The choices (dict ``jobs_awaiting_for_approval``) must be provided so the
+    caller can read it only once and use it many times, to minimize access to
+    it as it in shared memory.
+
+    The value returned is a dict ultimately used to hydrate a dropdown. The
+    keys can be either IDs or indices depending on the underlying link manager.
+    The value is the label that we want to show in the user interface, which
+    is extracted from the instance of ``workflow.TranslationLabel`` hold by
+    the link manager, given the ``lang`` of the user that made the request.
+
+    The caller should expect ``JobNotWaitingForApprovalError`` to be raised
+    when the job does not need a decision to be made.
+    """
+    ret = {}
+    try:
+        choices = jobs_awaiting_for_approval[job_id].choices
+    except (KeyError, AttributeError):
+        raise JobNotWaitingForApprovalError
+    for item in choices:
+        id_, label, rd = item
+        ret[id_] = label[lang]
+    return ret
 
 
 def start(workflow):

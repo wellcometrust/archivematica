@@ -30,8 +30,10 @@ from linkTaskManagerChoice import choicesAvailableForUnits, choicesAvailableForU
 
 from dicts import ReplacementDict, ChoicesDict
 from main.models import UserProfile, Job
+from workflow import TranslationLabel
 
 from django.conf import settings as django_settings
+from django.utils.six import text_type
 
 LOGGER = logging.getLogger('archivematica.mcp.server')
 
@@ -69,6 +71,7 @@ class linkTaskManagerGetUserChoiceFromMicroserviceGeneratedList(LinkTaskManager)
                 # For display, convert the ChoicesDict passVar into a list
                 # of tuples: (index, description, replacement dict string)
                 for description, value in item.items():
+                    description = TranslationLabel(description)
                     self.choices.append(
                         (index, description, str({key: value})))
                     index += 1
@@ -112,10 +115,10 @@ class linkTaskManagerGetUserChoiceFromMicroserviceGeneratedList(LinkTaskManager)
         etree.SubElement(ret, "UUID").text = self.jobChainLink.UUID
         ret.append(self.unit.xmlify())
         choices = etree.SubElement(ret, "choices")
-        for chainAvailable, description, rd in self.choices:
+        for index, description, __ in self.choices:
             choice = etree.SubElement(choices, "choice")
-            etree.SubElement(choice, "chainAvailable").text = chainAvailable.__str__()
-            etree.SubElement(choice, "description").text = description
+            etree.SubElement(choice, "chainAvailable").text = text_type(index)
+            etree.SubElement(choice, "description").text = text_type(description)
         return ret
 
     def proceedWithChoice(self, index, user_id):
@@ -132,7 +135,7 @@ class linkTaskManagerGetUserChoiceFromMicroserviceGeneratedList(LinkTaskManager)
         choicesAvailableForUnitsLock.release()
 
         # get the one at index, and go with it.
-        _, _, replace_dict = self.choices[int(index)]
+        __, __, replace_dict = self.choices[int(index)]
         rd = ReplacementDict.fromstring(replace_dict)
         self.update_passvar_replacement_dict(rd)
         self.jobChainLink.linkProcessingComplete(0, passVar=self.jobChainLink.passVar)

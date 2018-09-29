@@ -89,7 +89,7 @@ class unit:
                         microServiceChainLink)
             for var in variables:
                 var.variablevalue = variableValue
-                var.microservicechainlink_id = microServiceChainLink
+                var.microservicechainlink = microServiceChainLink
                 var.save()
         else:
             LOGGER.info('New UnitVariable %s created for %s: %s (MSCL: %s)',
@@ -98,6 +98,6 @@ class unit:
             var = UnitVariable(
                 unittype=self.unitType, unituuid=self.UUID,
                 variable=variable, variablevalue=variableValue,
-                microservicechainlink_id=microServiceChainLink
+                microservicechainlink=microServiceChainLink
             )
             var.save()

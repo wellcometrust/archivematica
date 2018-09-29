@@ -281,7 +281,7 @@ class ProcessingConfigurationForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super(ProcessingConfigurationForm, self).__init__(*args, **kwargs)
-        self._load_processing_config_fields()
+        self._load_processing_config_fields(kwargs.pop("user"))
         for choice_uuid, field in self.processing_fields.items():
             ftype = field['type']
             opts = self.DEFAULT_FIELD_OPTS.copy()
@@ -313,8 +313,8 @@ class ProcessingConfigurationForm(forms.Form):
             self.fields[choice_uuid] = forms.ChoiceField(
                 widget=Select(attrs={'class': 'form-control'}), **opts)
 
-    def _load_processing_config_fields(self):
-        client = MCPClient()
+    def _load_processing_config_fields(self, user):
+        client = MCPClient(user)
         self.processing_fields = client.get_processing_config_fields()
         for choice_uuid, field in self.processing_fields.items():
             field['label'] = self.LABELS[choice_uuid]

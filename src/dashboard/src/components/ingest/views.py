@@ -17,11 +17,9 @@
 
 # Standard library, alphabetical by import source
 import base64
-import calendar
 import cPickle
 import json
 import logging
-from lxml import etree
 import os
 import requests
 import shutil
@@ -32,7 +30,6 @@ import uuid
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.core.urlresolvers import reverse
-from django.db import connection
 from django.forms.models import modelformset_factory
 from django.http import Http404, HttpResponse, HttpResponseNotAllowed
 from django.shortcuts import render, redirect
@@ -65,16 +62,15 @@ logger = logging.getLogger('archivematica.dashboard')
 
 
 def ingest_grid(request):
-    polling_interval = django_settings.POLLING_INTERVAL
-    microservices_help = django_settings.MICROSERVICES_HELP
-    uid = request.user.id
-
     try:
         storage_service.get_location(purpose="BL")
     except:
         messages.warning(request, _('Error retrieving originals/arrange directory locations: is the storage server running? Please contact an administrator.'))
-
-    return render(request, 'ingest/grid.html', locals())
+    return render(request, 'ingest/grid.html', {
+        "polling_interval": django_settings.POLLING_INTERVAL,
+        "microservices_help": django_settings.MICROSERVICES_HELP,
+        "job_statuses": dict(models.Job.STATUS),
+    })
 
 
 class SipsView(View):
@@ -90,83 +86,15 @@ class SipsView(View):
 
 
 def ingest_status(request, uuid=None):
-    """Returns the status of the SIPs in ingest as a JSON object with an
-    ``objects`` attribute that is an array of objects, each of which represents
-    a single SIP. Each SIP object has a ``jobs`` attribute whose value is an
-    array of objects, each of which represents a Job of the SIP.
-    """
-    sql = """
-        SELECT SIPUUID,
-                MAX(UNIX_TIMESTAMP(createdTime) + createdTimeDec) AS timestamp
-            FROM Jobs
-            WHERE unitType='unitSIP' AND NOT SIPUUID LIKE '%%None%%'
-            GROUP BY SIPUUID;"""
-    with connection.cursor() as cursor:
-        cursor.execute(sql)
-        sipuuids_and_timestamps = cursor.fetchall()
-    mcp_available = False
+    response = {"objects": {}, "mcp": False}
     try:
-        client = MCPClient()
-        mcp_status = etree.XML(client.list())
-        mcp_available = True
+        client = MCPClient(request.user)
+        response["objects"] = client.get_sips_statuses()
     except Exception:
         pass
-    objects = []
-    for sipuuid, timestamp in sipuuids_and_timestamps:
-        timestamp = float(timestamp)
-        item = {'sipuuid': sipuuid, 'timestamp': timestamp}
-        # Check if hidden (TODO: this method is slow)
-        if models.SIP.objects.is_hidden(sipuuid):
-            continue
-        jobs = models.Job.objects\
-            .filter(sipuuid=item['sipuuid'], subjobof='')\
-            .order_by('-createdtime', 'subjobof')
-        item['directory'] = utils.get_directory_name_from_job(jobs)
-        item['uuid'] = item['sipuuid']
-        item['id'] = item['sipuuid']
-        del item['sipuuid']
-
-        # embed accession ID in status data (for DRMC customization)
-        try:
-            transfers = models.Transfer.objects.filter(file__sip_id=item['uuid']).distinct()
-            if transfers.count() > 1:
-                raise ValueError("Cannot handle arranged SIPs")
-            item['access_system_id'] = transfers[0].access_system_id
-        except:
-            pass
-
-        item['jobs'] = []
-        for job in jobs:
-            newJob = {}
-            item['jobs'].append(newJob)
-            newJob['uuid'] = job.jobuuid
-            newJob['type'] = job.jobtype
-            newJob['link_id'] = job.microservicechainlink.pk
-            newJob['microservicegroup'] = job.microservicegroup
-            newJob['subjobof'] = job.subjobof
-            newJob['currentstep'] = job.currentstep
-            newJob['currentstep_label'] = job.get_currentstep_display()
-            newJob['timestamp'] = '%d.%s' % (calendar.timegm(job.createdtime.timetuple()), str(job.createdtimedec).split('.')[-1])
-            try:
-                mcp_status
-            except NameError:
-                pass
-            else:
-                xml_unit = mcp_status.xpath('choicesAvailableForUnit[UUID="%s"]' % job.jobuuid)
-                if xml_unit:
-                    xml_unit_choices = xml_unit[0].findall('choices/choice')
-                    choices = {}
-                    for choice in xml_unit_choices:
-                        choices[choice.find("chainAvailable").text] = choice.find("description").text
-                    newJob['choices'] = choices
-        objects.append(item)
-    response = {}
-    response['objects'] = objects
-    response['mcp'] = mcp_available
-    return HttpResponse(
-        json.dumps(response),
-        content_type='application/json'
-    )
+    else:
+        response['mcp'] = True
+    return HttpResponse(json.dumps(response), content_type='application/json')
 
 
 def ingest_sip_metadata_type_id():
@@ -359,9 +287,6 @@ def ingest_upload(request, uuid):
             data = cPickle.loads(str(access.target))
         except:
             raise Http404
-        # Disabled, it could be very slow
-        # job = models.Job.objects.get(jobtype='Upload DIP', sipuuid=uuid)
-        # data['size'] = utils.get_directory_size(job.directory)
         return helpers.json_response(data)
 
     return HttpResponseNotAllowed(['GET', 'POST'])

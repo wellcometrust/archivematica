@@ -81,7 +81,7 @@ class jobChainLink:
             microservicegroup=self.group,
             createdtime=self.created_at,
             createdtimedec=self._created_at_dec,
-            microservicechainlink_id=self.pk)
+            microservicechainlink=self.pk)
 
     @property
     def _created_at_dec(self):

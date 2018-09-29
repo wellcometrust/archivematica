@@ -119,6 +119,7 @@ class TranslationLabel(object):
         return _UNKNOWN_TRANSLATION_LABEL
 
 
+@python_2_unicode_compatible
 class Workflow(object):
     def __init__(self, parsed_obj):
         self._src = parsed_obj
@@ -161,6 +162,7 @@ class Workflow(object):
         return self.links[link_id]
 
 
+@python_2_unicode_compatible
 class BaseLink(object):
     def __str__(self):
         return self.id
@@ -184,9 +186,6 @@ class Chain(BaseLink):
         self._workflow = workflow
         self._decode_translations()
 
-    def __str__(self):
-        return self.id
-
     def __repr__(self):
         return "Chain <{}>".format(self.id)
 
@@ -209,9 +208,6 @@ class Link(BaseLink):
         self._workflow = workflow
         self._decode_job_statuses()
         self._decode_translations()
-
-    def __str__(self):
-        return self.id
 
     def __repr__(self):
         return "Link <{}>".format(self.id)

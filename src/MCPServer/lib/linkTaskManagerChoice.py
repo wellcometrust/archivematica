@@ -39,6 +39,7 @@ from workflow_abilities import choice_is_available
 
 from main.models import UserProfile, Job
 from django.conf import settings as django_settings
+from django.utils.six import text_type
 
 waitingOnTimer = "waitingOnTimer"
 
@@ -79,7 +80,7 @@ class linkTaskManagerChoice(LinkTaskManager):
             if not choice_is_available(self.jobChainLink.link, chain,
                                        django_settings):
                 continue
-            self.choices.append((chain.id, chain.get_label("description")))
+            self.choices.append((chain_id, chain["description"], None))
 
     def checkForPreconfiguredXML(self):
         desiredChoice = None
@@ -137,10 +138,10 @@ class linkTaskManagerChoice(LinkTaskManager):
         etree.SubElement(ret, "UUID").text = self.jobChainLink.UUID
         ret.append(self.unit.xmlify())
         choices = etree.SubElement(ret, "choices")
-        for chainAvailable, description in self.choices:
+        for id_, description, __ in self.choices:
             choice = etree.SubElement(choices, "choice")
-            etree.SubElement(choice, "chainAvailable").text = chainAvailable.__str__()
-            etree.SubElement(choice, "description").text = description
+            etree.SubElement(choice, "chainAvailable").text = id_
+            etree.SubElement(choice, "description").text = text_type(description)
         return ret
 
     @log_exceptions
