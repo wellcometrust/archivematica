@@ -112,6 +112,10 @@ class TooManyResultsError(ElasticsearchError):
 _es_hosts = None
 _es_client = None
 DEFAULT_TIMEOUT = 10
+INDICES = ['aips', 'aipfiles', 'transfers', 'transferfiles']
+# A doc type is still required in ES 6.x but it's limited to one per index.
+# It will be removed in ES 7.x, so we'll use the same for all indexes.
+DOC_TYPE = '_doc'
 
 
 def setup(hosts, timeout=DEFAULT_TIMEOUT):
@@ -157,7 +161,7 @@ def get_client():
     """
     if not _es_client:
         raise ImproperlyConfigured('The Elasticsearch client has not been set up yet. Please call setup() first.')
-    create_indexes_if_needed(_es_client)  # TODO: find a better place!
+    _create_indexes_if_needed(_es_client)  # TODO: find a better place!
     return _es_client
 
 
@@ -201,21 +205,140 @@ def wait_for_cluster_yellow_status(client, wait_between_tries=10, max_tries=10):
             time.sleep(wait_between_tries)
 
 
-def create_indexes_if_needed(client):
-    create_aips_index(client)
-    create_transfers_index(client)
+def _create_indexes_if_needed(client):
+    """
+    Checks if all indeces exist in the client. Otherwise, creates the missing
+    ones with their settings and mappings.
+    """
+    if client.indices.exists(index=','.join(INDICES)):
+        logger.info('All indices already created.')
+        return
+    for index in INDICES:
+        # Call get index body functions bellow for each index
+        body = getattr(sys.modules[__name__], '_get_%s_index_body' % index)()
+        logger.info('Creating "%s" index ...' % index)
+        client.indices.create(index, body=body, ignore=400)
+        logger.info('Index created.')
 
 
-def create_aips_index(client):
-    create_index(client, 'aips')
-    if not aip_mapping_is_correct(client):
-        raise ElasticsearchError('The AIP index mapping is incorrect. The "aips" index should be re-created.')
+def _get_aips_index_body():
+    return {
+        'mappings': {
+            DOC_TYPE: {
+                'date_detection': False,
+                'properties': {
+                    'name': SORTABLE_STRING_FIELD_SPEC,
+                    'size': {'type': 'double'},
+                    'uuid': MACHINE_READABLE_FIELD_SPEC,
+                    'mets': _load_mets_mapping('aips'),
+                }
+            }
+        }
+    }
 
 
-def create_transfers_index(client):
-    create_index(client, 'transfers')
-    if not transfer_mapping_is_correct(client):
-        raise ElasticsearchError('The transfer index mapping is incorrect. The "transfers" index should be re-created.')
+def _get_aipfiles_index_body():
+    return {
+        'mappings': {
+            DOC_TYPE: {
+                'date_detection': False,
+                'properties': {
+                    'AIPUUID': MACHINE_READABLE_FIELD_SPEC,
+                    'FILEUUID': MACHINE_READABLE_FIELD_SPEC,
+                    'isPartOf': MACHINE_READABLE_FIELD_SPEC,
+                    'AICID': MACHINE_READABLE_FIELD_SPEC,
+                    'sipName': {'type': 'text'},
+                    'indexedAt': {'type': 'double'},
+                    'filePath': {'type': 'text'},
+                    'fileExtension': {'type': 'text'},
+                    'origin': {'type': 'text'},
+                    'identifiers': MACHINE_READABLE_FIELD_SPEC,
+                    'METS': _load_mets_mapping('aipfiles'),
+                }
+            }
+        }
+    }
+
+
+def _get_transfers_index_body():
+    return {
+        'mappings': {
+            DOC_TYPE: {
+                'properties': {
+                    'name': {'type': 'text'},
+                    'status': {'type': 'text'},
+                    'ingest_date': {
+                        'type': 'date',
+                        'format': 'dateOptionalTime',
+                    },
+                    'file_count': {'type': 'integer'},
+                    'uuid': MACHINE_READABLE_FIELD_SPEC,
+                    'pending_deletion': {'type': 'boolean'}
+                }
+            }
+        }
+    }
+
+
+def _get_transferfiles_index_body():
+    return {
+        'mappings': {
+            DOC_TYPE: {
+                'properties': {
+                    'filename': {'type': 'text'},
+                    'relative_path': {'type': 'text'},
+                    'fileuuid': MACHINE_READABLE_FIELD_SPEC,
+                    'sipuuid': MACHINE_READABLE_FIELD_SPEC,
+                    'accessionid': MACHINE_READABLE_FIELD_SPEC,
+                    'status': MACHINE_READABLE_FIELD_SPEC,
+                    'origin': MACHINE_READABLE_FIELD_SPEC,
+                    'ingestdate': {
+                        'type': 'date',
+                        'format': 'dateOptionalTime',
+                    },
+                    # METS.xml files in transfers sent to backlog will have ''
+                    # as their modification_date value. This can cause a
+                    # failure in certain cases, see:
+                    # https://github.com/artefactual/archivematica/issues/719.
+                    # For this reason, we specify the type and format here and
+                    # ignore malformed values like ''.
+                    'modification_date': {
+                        'type': 'date',
+                        'format': 'dateOptionalTime',
+                        'ignore_malformed': True,
+                    },
+                    'created': {'type': 'double'},
+                    'size': {'type': 'double'},
+                    'tags': MACHINE_READABLE_FIELD_SPEC,
+                    'file_extension': MACHINE_READABLE_FIELD_SPEC,
+                    'bulk_extractor_reports': MACHINE_READABLE_FIELD_SPEC,
+                    'format': {
+                        'type': 'nested',
+                        'properties': {
+                            'puid': MACHINE_READABLE_FIELD_SPEC,
+                            'format': {'type': 'text'},
+                            'group': {'type': 'text'},
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+def _load_mets_mapping(index):
+    """
+    Load external METS mappings:
+    These were generated from an AIP which had all the metadata fields filled
+    out and should represent a pretty complete structure.
+    We don't want to leave this up to dynamic mapping, since automatic type
+    detection may result in some fields being detected as date fields, and
+    subsequently causing problems.
+    """
+    json_file = '%s_mets_mapping.json' % index
+    path = os.path.join(__file__, '..', 'elasticsearch', json_file)
+    with open(os.path.normpath(path)) as f:
+        return json.load(f)
 
 
 def search_all_results(client, body, index=None, doc_type=None, **query_params):
@@ -242,153 +365,6 @@ def search_all_results(client, body, index=None, doc_type=None, **query_params):
     if results['hits']['total'] > MAX_QUERY_SIZE:
         logger.warning('Number of items in backlog (%s) exceeds maximum amount fetched (%s)', results['hits']['total'], MAX_QUERY_SIZE)
     return results
-
-
-def get_type_mapping(client, index, type):
-    return client.indices.get_mapping(index, doc_type=type)[index]['mappings']
-
-
-def transfer_mapping_is_correct(client):
-    try:
-        # mapping already created
-        mapping = get_type_mapping(client, 'transfers', 'transferfile')
-    except:  # create mapping
-        set_up_mapping(client, 'transfers')
-        mapping = get_type_mapping(client, 'transfers', 'transferfile')
-
-    return mapping['transferfile']['properties']['accessionid']['index'] == 'not_analyzed'
-
-
-def aip_mapping_is_correct(client):
-    try:
-        # mapping already created
-        mapping = get_type_mapping(client, 'aips', 'aipfile')
-    except:  # create mapping
-        set_up_mapping(client, 'aips')
-        mapping = get_type_mapping(client, 'aips', 'aipfile')
-
-    return mapping['aipfile']['properties']['AIPUUID']['index'] == 'not_analyzed'
-
-
-def create_index(client, index, attempt=1):
-    if attempt > 3:
-        return
-    response = client.indices.create(index, ignore=400)
-    if 'error' in response and 'IndexAlreadyExistsException' in response['error']:
-        return
-    set_up_mapping(client, index)
-    create_index(client, index, attempt + 1)
-
-
-def set_up_mapping_aip_index(client):
-    # Load external METS mappings
-    # These were generated from an AIP which had all the metadata fields filled out,
-    # and should represent a pretty complete structure.
-    # We don't want to leave this up to dynamic mapping, since automatic type
-    # detection may result in some fields being detected as date fields, and
-    # subsequently causing problems.
-    with open(os.path.normpath(os.path.join(__file__, "..", "elasticsearch", "aip_mets_mapping.json"))) as f:
-        aip_mets_mapping = json.load(f)
-    with open(os.path.normpath(os.path.join(__file__, "..", "elasticsearch", "aipfile_mets_mapping.json"))) as f:
-        aipfile_mets_mapping = json.load(f)
-
-    mapping = {
-        'name': SORTABLE_STRING_FIELD_SPEC,
-        'size': {'type': 'double'},
-        'uuid': MACHINE_READABLE_FIELD_SPEC,
-        'mets': aip_mets_mapping,
-    }
-
-    logger.info('Creating AIP mapping...')
-    client.indices.put_mapping(
-        doc_type='aip',
-        body={'aip': {'date_detection': False, 'properties': mapping}},
-        index='aips'
-    )
-    logger.info('AIP mapping created.')
-
-    mapping = {
-        'AIPUUID': MACHINE_READABLE_FIELD_SPEC,
-        'FILEUUID': MACHINE_READABLE_FIELD_SPEC,
-        'isPartOf': MACHINE_READABLE_FIELD_SPEC,
-        'AICID': MACHINE_READABLE_FIELD_SPEC,
-        'sipName': {'type': 'text'},
-        'indexedAt': {'type': 'double'},
-        'filePath': {'type': 'text'},
-        'fileExtension': {'type': 'text'},
-        'origin': {'type': 'text'},
-        'identifiers': MACHINE_READABLE_FIELD_SPEC,
-        'METS': aipfile_mets_mapping,
-    }
-
-    logger.info('Creating AIP file mapping...')
-    client.indices.put_mapping(
-        doc_type='aipfile',
-        body={'aipfile': {'date_detection': False, 'properties': mapping}},
-        index='aips'
-    )
-    logger.info('AIP file mapping created.')
-
-
-def set_up_mapping_transfer_index(client):
-    transferfile_mapping = {
-        'filename': {'type': 'text'},
-        'relative_path': {'type': 'text'},
-        'fileuuid': MACHINE_READABLE_FIELD_SPEC,
-        'sipuuid': MACHINE_READABLE_FIELD_SPEC,
-        'accessionid': MACHINE_READABLE_FIELD_SPEC,
-        'status': MACHINE_READABLE_FIELD_SPEC,
-        'origin': MACHINE_READABLE_FIELD_SPEC,
-        'ingestdate': {'type': 'date', 'format': 'dateOptionalTime'},
-        # METS.xml files in transfers sent to backlog will have '' as their
-        # modification_date value. This can cause a failure in certain
-        # cases---see https://github.com/artefactual/archivematica/issues/719.
-        # For this reason, we specify the type and format here and ignore
-        # malformed values like ''.
-        'modification_date': {'type': 'date', 'format': 'dateOptionalTime',
-                              'ignore_malformed': True},
-        'created': {'type': 'double'},
-        'size': {'type': 'double'},
-        'tags': MACHINE_READABLE_FIELD_SPEC,
-        'file_extension': MACHINE_READABLE_FIELD_SPEC,
-        'bulk_extractor_reports': MACHINE_READABLE_FIELD_SPEC,
-        'format': {
-            'type': 'nested',
-            'properties': {
-                'puid': MACHINE_READABLE_FIELD_SPEC,
-                'format': {'type': 'text'},
-                'group': {'type': 'text'},
-            }
-        }
-    }
-
-    logger.info('Creating transfer file mapping...')
-    client.indices.put_mapping(doc_type='transferfile', body={'transferfile': {'properties': transferfile_mapping}},
-                               index='transfers')
-
-    logger.info('Transfer file mapping created.')
-
-    transfer_mapping = {
-        'name': {'type': 'text'},
-        'status': {'type': 'text'},
-        'ingest_date': {'type': 'date', 'format': 'dateOptionalTime'},
-        'file_count': {'type': 'integer'},
-        'uuid': MACHINE_READABLE_FIELD_SPEC,
-        'pending_deletion': {'type': 'boolean'}
-    }
-
-    logger.info('Creating transfer mapping...')
-    client.indices.put_mapping(doc_type='transfer', body={'transfer': {'properties': transfer_mapping}},
-                               index='transfers')
-
-    logger.info('Transfer mapping created.')
-
-
-def set_up_mapping(client, index):
-    if index == 'transfers':
-        set_up_mapping_transfer_index(client)
-    if index == 'aips':
-        set_up_mapping_aip_index(client)
 
 
 def index_aip(client, uuid, name, filePath, pathToMETS, size=None, aips_in_aic=None, identifiers=[], encrypted=False):
