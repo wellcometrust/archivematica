@@ -970,7 +970,7 @@ def get_transfer_file_info(client, field, value):
 
 
 def remove_backlog_transfer(client, uuid):
-    return delete_matching_documents(client, 'transfers', 'transfer', 'uuid', uuid)
+    return _delete_matching_documents(client, 'transfers', 'uuid', uuid)
 
 
 def remove_backlog_transfer_files(client, uuid):
@@ -1001,23 +1001,21 @@ def remove_transfer_files(client, uuid, unit_type=None):
 
 
 def delete_aip(client, uuid):
-    return delete_matching_documents(client, 'aips', 'aip', 'uuid', uuid)
+    return _delete_matching_documents(client, 'aips', 'uuid', uuid)
 
 
 def delete_aip_files(client, uuid):
-    return delete_matching_documents(client, 'aips', 'aipfile', 'AIPUUID', uuid)
+    return _delete_matching_documents(client, 'aipfiles', 'AIPUUID', uuid)
 
 
-def delete_matching_documents(client, index, doc_type, field, value):
+def _delete_matching_documents(client, index, field, value):
     """
-    Deletes all documents in index & doc_type where field = value
+    Deletes all documents in index where field = value
 
     :param Elasticsearch client: Elasticsearch client
     :param str index: Name of the index. E.g. 'aips'
-    :param str doc_type: Document type in the index. E.g. 'aip'
     :param str field: Field to query when deleting. E.g. 'uuid'
     :param str value: Value of the field to query when deleting. E.g. 'cd0bb626-cf27-4ca3-8a77-f14496b66f04'
-    :return: True if succeeded on shards, false otherwise
     """
     query = {
         "query": {
@@ -1027,15 +1025,8 @@ def delete_matching_documents(client, index, doc_type, field, value):
         }
     }
     logger.info('Deleting with query %s', query)
-    results = client.delete_by_query(
-        index=index,
-        doc_type=doc_type,
-        body=query
-    )
-
+    results = client.delete_by_query(index=index, body=query)
     logger.info('Deleted by query %s', results)
-
-    return results['_indices'][index]['_shards']['successful'] == results['_indices'][index]['_shards']['total']
 
 
 def update_field(client, uuid, index, doc_type, field, status):
