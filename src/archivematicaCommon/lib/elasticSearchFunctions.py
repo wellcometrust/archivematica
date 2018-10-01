@@ -88,6 +88,13 @@ MACHINE_READABLE_FIELD_SPEC = {
     'type': 'keyword',
 }
 
+SORTABLE_STRING_FIELD_SPEC = {
+    'type': 'text',
+    'fields': {
+        'raw': {'type': 'keyword'},
+    }
+}
+
 
 class ElasticsearchError(Exception):
     """ Not operational errors. """
@@ -273,15 +280,6 @@ def create_index(client, index, attempt=1):
     create_index(client, index, attempt + 1)
 
 
-def _sortable_string_field_specification():
-    return {
-        'type': 'text',
-        'fields': {
-            'raw': {'type': 'keyword'},
-        }
-    }
-
-
 def set_up_mapping_aip_index(client):
     # Load external METS mappings
     # These were generated from an AIP which had all the metadata fields filled out,
@@ -295,7 +293,7 @@ def set_up_mapping_aip_index(client):
         aipfile_mets_mapping = json.load(f)
 
     mapping = {
-        'name': _sortable_string_field_specification(),
+        'name': SORTABLE_STRING_FIELD_SPEC,
         'size': {'type': 'double'},
         'uuid': MACHINE_READABLE_FIELD_SPEC,
         'mets': aip_mets_mapping,
