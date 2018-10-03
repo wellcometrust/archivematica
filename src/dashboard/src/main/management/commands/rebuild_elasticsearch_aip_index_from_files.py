@@ -157,17 +157,20 @@ def processAIPThenDeleteMETSFile(path, temp_dir, es_client,
 
     aip_info = storage_service.get_file_info(uuid=aip_uuid)
 
-    if aip_info:
-        elasticSearchFunctions.index_aip_and_files(
-            client=es_client,
-            uuid=aip_uuid,
-            path=path,
-            mets_path=path_to_mets,
-            name=aip_name,
-            size=aip_info[0]['size'],
-            aips_in_aic=aips_in_aic,
-            identifiers=[],  # TODO get these
-        )
+    if not aip_info:
+        print('Information not found in Storage Service for AIP UUID: ', aip_uuid)
+        return 1
+
+    return elasticSearchFunctions.index_aip_and_files(
+        client=es_client,
+        uuid=aip_uuid,
+        path=path,
+        mets_path=path_to_mets,
+        name=aip_name,
+        size=aip_info[0]['size'],
+        aips_in_aic=aips_in_aic,
+        identifiers=[],  # TODO get these
+    )
 
 
 def is_hex(string):
@@ -258,8 +261,7 @@ class Command(DashboardCommand):
                 if options['uuid'] and \
                         options['uuid'].lower() not in directory.lower():
                     continue
-                count += 1
-                processAIPThenDeleteMETSFile(
+                ret = processAIPThenDeleteMETSFile(
                     path=os.path.join(root, directory),
                     temp_dir=temp_dir,
                     es_client=es_client,
@@ -267,6 +269,9 @@ class Command(DashboardCommand):
                 )
                 # Don't recurse into this directory
                 directories = directories.remove(directory)
+                # Update count on successful index
+                if ret == 0:
+                    count += 1
 
             # Compressed AIPs
             for filename in files:
@@ -278,16 +283,18 @@ class Command(DashboardCommand):
                 if options['uuid'] and \
                         options['uuid'].lower() not in filename.lower():
                     continue
-                count += 1
-                processAIPThenDeleteMETSFile(
+                ret = processAIPThenDeleteMETSFile(
                     path=os.path.join(root, filename),
                     temp_dir=temp_dir,
                     es_client=es_client,
                     delete_existing_data=options['delete'],
                 )
+                # Update count on successful index
+                if ret == 0:
+                    count += 1
 
         print("Cleaning up")
 
         shutil.rmtree(temp_dir)
 
-        print("Indexing complete. Indexed", count, "AIPs")
+        print("Indexing complete. Indexed", count, "AIP(s).")
