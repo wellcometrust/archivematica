@@ -49,12 +49,12 @@ from elasticsearch import Elasticsearch, ImproperlyConfigured
 
 logger = logging.getLogger('archivematica.common')
 
-MAX_QUERY_SIZE = 50000  # TODO Check that this is a reasonable number
 MATCH_ALL_QUERY = {
     "query": {
         "match_all": {}
     }
 }
+
 # Returns files which are in the backlog; *omits* files without UUIDs,
 # e.g. administrative files (AM metadata and logs directories).
 BACKLOG_FILTER_NO_MD_LOGS = {
@@ -112,6 +112,7 @@ class TooManyResultsError(ElasticsearchError):
 _es_hosts = None
 _es_client = None
 DEFAULT_TIMEOUT = 10
+MAX_QUERY_SIZE = 50000  # TODO: Check that this is a reasonable number
 INDICES = ['aips', 'aipfiles', 'transfers', 'transferfiles']
 # A doc type is still required in ES 6.x but it's limited to one per index.
 # It will be removed in ES 7.x, so we'll use the same for all indexes.
@@ -165,31 +166,12 @@ def get_client():
     return _es_client
 
 
-def remove_tool_output_from_mets(doc):
-    """
-    Given an ElementTree object, removes all objectsCharacteristicsExtensions elements.
-    This modifies the existing document in-place; it does not return a new document.
-
-    This helps index METS files, which might otherwise get too large to
-    be usable.
-    """
-    root = doc.getroot()
-
-    # remove tool output nodes
-    toolNodes = root.findall("mets:amdSec/mets:techMD/mets:mdWrap/mets:xmlData/premis:object/premis:objectCharacteristics/premis:objectCharacteristicsExtension", namespaces=ns.NSMAP)
-
-    for parent in toolNodes:
-        parent.clear()
-
-    print("Removed FITS output from METS.")
-
-
 def _wait_for_cluster_yellow_status(client, wait_between_tries=10, max_tries=10):
     health = {}
     health['status'] = None
     tries = 0
 
-    # wait for either yellow or green status
+    # Wait for either yellow or green status
     while health['status'] != 'yellow' and health['status'] != 'green' and tries < max_tries:
         tries = tries + 1
 
@@ -199,10 +181,15 @@ def _wait_for_cluster_yellow_status(client, wait_between_tries=10, max_tries=10)
             print('ERROR: failed health check.')
             health['status'] = None
 
-        # sleep if cluster not healthy
+        # Sleep if cluster not healthy
         if health['status'] != 'yellow' and health['status'] != 'green':
             print("Cluster not in yellow or green state... waiting to retry.")
             time.sleep(wait_between_tries)
+
+
+# --------------
+# CREATE INDEXES
+# --------------
 
 
 def create_indexes_if_needed(client):
@@ -341,30 +328,9 @@ def _load_mets_mapping(index):
         return json.load(f)
 
 
-def search_all_results(client, body, index=None, doc_type=None, **query_params):
-    """
-    Performs client.search with the size set to MAX_QUERY_SIZE.
-
-    By default search_raw returns only 10 results.  Since we usually want all
-    results, this is a wrapper that fetches MAX_QUERY_SIZE results and logs a
-    warning if more results were available.
-    """
-    if isinstance(index, list):
-        index = ','.join(index)
-
-    if isinstance(doc_type, list):
-        doc_type = ','.join(doc_type)
-
-    results = client.search(
-        body=body,
-        index=index,
-        doc_type=doc_type,
-        size=MAX_QUERY_SIZE,
-        **query_params)
-
-    if results['hits']['total'] > MAX_QUERY_SIZE:
-        logger.warning('Number of items in backlog (%s) exceeds maximum amount fetched (%s)', results['hits']['total'], MAX_QUERY_SIZE)
-    return results
+# ---------------
+# INDEX RESOURCES
+# ---------------
 
 
 def index_aip_and_files(client, uuid, path, mets_path, name, size=None, aips_in_aic=None, identifiers=[], encrypted=False, printfn=print):
@@ -400,7 +366,7 @@ def index_aip_and_files(client, uuid, path, mets_path, name, size=None, aips_in_
     tree = ElementTree.parse(mets_path)
 
     # TODO: Add a conditional to toggle this
-    remove_tool_output_from_mets(tree)
+    _remove_tool_output_from_mets(tree)
 
     root = tree.getroot()
     # Extract AIC identifier, other specially-indexed information
@@ -415,7 +381,7 @@ def index_aip_and_files(client, uuid, path, mets_path, name, size=None, aips_in_
 
     # Convert METS XML to dict
     xml = ElementTree.tostring(root)
-    mets_data = rename_dict_keys_with_child_dicts(normalize_dict_values(xmltodict.parse(xml)))
+    mets_data = _rename_dict_keys_with_child_dicts(_normalize_dict_values(xmltodict.parse(xml)))
 
     # Pull the create time from the METS header
     mets_hdr = root.find('mets:metsHdr', namespaces=ns.NSMAP)
@@ -479,7 +445,7 @@ def _index_aip_files(client, uuid, mets_path, name, identifiers=[], printfn=prin
     root = tree.getroot()
 
     # TODO: Add a conditional to toggle this
-    remove_tool_output_from_mets(tree)
+    _remove_tool_output_from_mets(tree)
 
     # Get SIP-wide dmdSec
     dmdSec = root.findall("mets:dmdSec/mets:mdWrap/mets:xmlData", namespaces=ns.NSMAP)
@@ -511,7 +477,7 @@ def _index_aip_files(client, uuid, mets_path, name, identifiers=[], printfn=prin
         'isPartOf': is_part_of,
         'AICID': aic_identifier,
         'METS': {
-            'dmdSec': rename_dict_keys_with_child_dicts(normalize_dict_values(dmdSecData)),
+            'dmdSec': _rename_dict_keys_with_child_dicts(_normalize_dict_values(dmdSecData)),
             'amdSec': {},
         },
         'origin': get_dashboard_uuid(),
@@ -548,7 +514,7 @@ def _index_aip_files(client, uuid, mets_path, name, identifiers=[], printfn=prin
 
             # Index amdSec information
             xml = ElementTree.tostring(amdSecInfo)
-            indexData['METS']['amdSec'] = rename_dict_keys_with_child_dicts(normalize_dict_values(xmltodict.parse(xml)))
+            indexData['METS']['amdSec'] = _rename_dict_keys_with_child_dicts(_normalize_dict_values(xmltodict.parse(xml)))
 
         indexData['FILEUUID'] = fileUUID
 
@@ -639,8 +605,8 @@ def _index_transfer_files(client, uuid, path, status='', printfn=print):
     files_indexed = 0
     ingest_date = str(datetime.datetime.today())[0:10]
 
-    # Some files should not be indexed
-    # This should match the basename of the file
+    # Some files should not be indexed.
+    # This should match the basename of the file.
     ignore_files = [
         'processingMCP.xml',
     ]
@@ -656,7 +622,7 @@ def _index_transfer_files(client, uuid, path, status='', printfn=print):
     # Get dashboard UUID
     dashboard_uuid = get_dashboard_uuid()
 
-    for filepath in list_files_in_dir(path):
+    for filepath in _list_files_in_dir(path):
         if os.path.isfile(filepath):
             # Get file UUID
             file_uuid = ''
@@ -735,20 +701,28 @@ def _try_to_index(client, data, index, wait_between_tries=10, max_tries=10, prin
         raise exception
 
 
-def get_aip_data(client, uuid, fields=None):
-    search_params = {
-        'body': {
-            'query': {'term': {'uuid': uuid}}
-        },
-        'index': 'aips'
-    }
+# ----------------
+# INDEXING HELPERS
+# ----------------
 
-    if fields:
-        search_params['fields'] = fields
 
-    aips = client.search(**search_params)
+def _remove_tool_output_from_mets(doc):
+    """
+    Given an ElementTree object, removes all objectsCharacteristicsExtensions elements.
+    This modifies the existing document in-place; it does not return a new document.
 
-    return aips['hits']['hits'][0]
+    This helps index METS files, which might otherwise get too large to
+    be usable.
+    """
+    root = doc.getroot()
+
+    # Remove tool output nodes
+    toolNodes = root.findall("mets:amdSec/mets:techMD/mets:mdWrap/mets:xmlData/premis:object/premis:objectCharacteristics/premis:objectCharacteristicsExtension", namespaces=ns.NSMAP)
+
+    for parent in toolNodes:
+        parent.clear()
+
+    print("Removed FITS output from METS.")
 
 
 def _extract_transfer_metadata(doc):
@@ -756,56 +730,61 @@ def _extract_transfer_metadata(doc):
             for el in doc.findall("mets:amdSec/mets:sourceMD/mets:mdWrap/mets:xmlData/transfer_metadata", namespaces=ns.NSMAP)]
 
 
-# To avoid Elasticsearch schema collisions, if a dict value is itself a
-# dict then rename the dict key to differentiate it from similar instances
-# where the same key has a different value type.
-def rename_dict_keys_with_child_dicts(data):
+def _rename_dict_keys_with_child_dicts(data):
+    """
+    To avoid Elasticsearch schema collisions, if a dict value is itself a
+    dict then rename the dict key to differentiate it from similar instances
+    where the same key has a different value type.
+    """
     new = {}
     for key in data:
         if isinstance(data[key], dict):
-            new[key + '_data'] = rename_dict_keys_with_child_dicts(data[key])
+            new[key + '_data'] = _rename_dict_keys_with_child_dicts(data[key])
         elif isinstance(data[key], list):
             # Elasticsearch's lists are typed; a list of strings and
             # a list of objects are not the same type. Check the type
             # of the first object in the list and use that as the tag,
             # rather than just tagging this "_list"
             type_of_list = type(data[key][0]).__name__
-            new[key + '_' + type_of_list + '_list'] = rename_list_elements_if_they_are_dicts(data[key])
+            value = _rename_list_elements_if_they_are_dicts(data[key])
+            new[key + '_' + type_of_list + '_list'] = value
         else:
             new[key] = data[key]
     return new
 
 
-def rename_list_elements_if_they_are_dicts(data):
+def _rename_list_elements_if_they_are_dicts(data):
     for index, value in enumerate(data):
         if isinstance(value, list):
-            data[index] = rename_list_elements_if_they_are_dicts(value)
+            data[index] = _rename_list_elements_if_they_are_dicts(value)
         elif isinstance(value, dict):
-            data[index] = rename_dict_keys_with_child_dicts(value)
+            data[index] = _rename_dict_keys_with_child_dicts(value)
     return data
 
 
-# Because an XML document node may include one or more children, conversion
-# to a dict can result in the converted child being one of two types.
-# this causes problems in an Elasticsearch index as it expects consistant
-# types to be indexed.
-# The below function recurses a dict and if a dict's value is another dict,
-# it encases it in a list.
-def normalize_dict_values(data):
+def _normalize_dict_values(data):
+    """
+    Because an XML document node may include one or more children, conversion
+    to a dict can result in the converted child being one of two types.
+    this causes problems in an Elasticsearch index as it expects consistant
+    types to be indexed.
+    The below function recurses a dict and if a dict's value is another dict,
+    it encases it in a list.
+    """
     for key in data:
         if isinstance(data[key], dict):
-            data[key] = [normalize_dict_values(data[key])]
+            data[key] = [_normalize_dict_values(data[key])]
         elif isinstance(data[key], list):
-            data[key] = normalize_list_dict_elements(data[key])
+            data[key] = _normalize_list_dict_elements(data[key])
     return data
 
 
-def normalize_list_dict_elements(data):
+def _normalize_list_dict_elements(data):
     for index, value in enumerate(data):
         if isinstance(value, list):
-            data[index] = normalize_list_dict_elements(value)
+            data[index] = _normalize_list_dict_elements(value)
         elif isinstance(value, dict):
-            data[index] = normalize_dict_values(value)
+            data[index] = _normalize_dict_values(value)
     return data
 
 
@@ -838,18 +817,68 @@ def _list_bulk_extractor_reports(transfer_path, file_uuid):
     return reports
 
 
-def list_files_in_dir(path, filepaths=[]):
-    # define entries
+def _list_files_in_dir(path, filepaths=[]):
+    # Define entries
     for file in os.listdir(path):
         child_path = os.path.join(path, file)
         filepaths.append(child_path)
 
-        # if entry is a directory, recurse
+        # If entry is a directory, recurse
         if os.path.isdir(child_path) and os.access(child_path, os.R_OK):
-            list_files_in_dir(child_path, filepaths)
+            _list_files_in_dir(child_path, filepaths)
 
-    # return fully traversed data
+    # Return fully traversed data
     return filepaths
+
+
+# -------
+# QUERIES
+# -------
+
+
+def search_all_results(client, body, index=None, doc_type=None, **query_params):
+    """
+    Performs client.search with the size set to MAX_QUERY_SIZE.
+
+    By default search_raw returns only 10 results.  Since we usually want all
+    results, this is a wrapper that fetches MAX_QUERY_SIZE results and logs a
+    warning if more results were available.
+    """
+    if isinstance(index, list):
+        index = ','.join(index)
+
+    if isinstance(doc_type, list):
+        doc_type = ','.join(doc_type)
+
+    results = client.search(
+        body=body,
+        index=index,
+        doc_type=doc_type,
+        size=MAX_QUERY_SIZE,
+        **query_params)
+
+    if results['hits']['total'] > MAX_QUERY_SIZE:
+        logger.warning(
+            'Number of items in backlog (%s) exceeds maximum amount '
+            'fetched (%s)', results['hits']['total'], MAX_QUERY_SIZE
+        )
+    return results
+
+
+def get_aip_data(client, uuid, fields=None):
+    search_params = {
+        'body': {
+            'query': {'term': {'uuid': uuid}}
+        },
+        'index': 'aips'
+    }
+
+    if fields:
+        search_params['fields'] = fields
+
+    aips = client.search(**search_params)
+
+    return aips['hits']['hits'][0]
 
 
 def _document_ids_from_field_query(client, index, doc_types, field, value):
@@ -876,7 +905,7 @@ def _document_ids_from_field_query(client, index, doc_types, field, value):
     return document_ids
 
 
-def document_id_from_field_query(client, index, doc_types, field, value):
+def _document_id_from_field_query(client, index, doc_types, field, value):
     document_id = None
     query = {
         "query": {
@@ -925,7 +954,8 @@ def get_file_tags(client, uuid):
         raise TooManyResultsError('{} matches found for file with UUID {}; unable to fetch a single result'.format(count, uuid))
 
     result = results['hits']['hits'][0]
-    if 'fields' not in result:  # file has no tags
+    # File has no tags
+    if 'fields' not in result:
         return []
     return result['fields']['tags']
 
@@ -1002,19 +1032,24 @@ def get_transfer_file_info(client, field, value):
     return results
 
 
+# -------
+# DELETES
+# -------
+
+
 def remove_backlog_transfer(client, uuid):
     return _delete_matching_documents(client, 'transfers', 'uuid', uuid)
 
 
 def remove_backlog_transfer_files(client, uuid):
-    return remove_transfer_files(client, uuid, 'transfer')
+    return _remove_transfer_files(client, uuid, 'transfer')
 
 
 def remove_sip_transfer_files(client, uuid):
-    return remove_transfer_files(client, uuid, 'sip')
+    return _remove_transfer_files(client, uuid, 'sip')
 
 
-def remove_transfer_files(client, uuid, unit_type=None):
+def _remove_transfer_files(client, uuid, unit_type=None):
     if unit_type == 'transfer':
         transfers = {uuid}
     else:
@@ -1062,8 +1097,13 @@ def _delete_matching_documents(client, index, field, value):
     logger.info('Deleted by query %s', results)
 
 
-def update_field(client, uuid, index, doc_type, field, status):
-    document_id = document_id_from_field_query(client, index, [doc_type], 'uuid', uuid)
+# -------
+# UPDATES
+# -------
+
+
+def _update_field(client, uuid, index, doc_type, field, status):
+    document_id = _document_id_from_field_query(client, index, [doc_type], 'uuid', uuid)
 
     if document_id is None:
         logger.error('Unable to find document with UUID {} in index {}'.format(uuid, index))
@@ -1082,15 +1122,20 @@ def update_field(client, uuid, index, doc_type, field, status):
 
 
 def mark_aip_deletion_requested(client, uuid):
-    update_field(client, uuid, 'aips', 'aip', 'status', 'DEL_REQ')
+    _update_field(client, uuid, 'aips', 'aip', 'status', 'DEL_REQ')
 
 
 def mark_aip_stored(client, uuid):
-    update_field(client, uuid, 'aips', 'aip', 'status', 'UPLOADED')
+    _update_field(client, uuid, 'aips', 'aip', 'status', 'UPLOADED')
 
 
 def mark_backlog_deletion_requested(client, uuid):
-    update_field(client, uuid, 'transfers', 'transfer', 'pending_deletion', True)
+    _update_field(client, uuid, 'transfers', 'transfer', 'pending_deletion', True)
+
+
+# ---------------
+# RESULTS HELPERS
+# ---------------
 
 
 def normalize_results_dict(d):
