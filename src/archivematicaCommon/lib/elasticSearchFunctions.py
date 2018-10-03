@@ -907,20 +907,9 @@ def _document_ids_from_field_query(client, index, doc_types, field, value):
 
 def _document_id_from_field_query(client, index, doc_types, field, value):
     document_id = None
-    query = {
-        "query": {
-            "term": {
-                field: value
-            }
-        }
-    }
-    documents = search_all_results(
-        client,
-        body=query,
-        doc_type=doc_types
-    )
-    if len(documents['hits']['hits']) == 1:
-        document_id = documents['hits']['hits'][0]['_id']
+    ids = _document_ids_from_field_query(client, index, doc_types, field, value)
+    if len(ids) == 1:
+        document_id = ids[0]
     return document_id
 
 
