@@ -161,7 +161,7 @@ def get_client():
     """
     if not _es_client:
         raise ImproperlyConfigured('The Elasticsearch client has not been set up yet. Please call setup() first.')
-    _create_indexes_if_needed(_es_client)  # TODO: find a better place!
+    create_indexes_if_needed(_es_client)  # TODO: find a better place!
     return _es_client
 
 
@@ -184,7 +184,7 @@ def remove_tool_output_from_mets(doc):
     print("Removed FITS output from METS.")
 
 
-def wait_for_cluster_yellow_status(client, wait_between_tries=10, max_tries=10):
+def _wait_for_cluster_yellow_status(client, wait_between_tries=10, max_tries=10):
     health = {}
     health['status'] = None
     tries = 0
@@ -205,7 +205,7 @@ def wait_for_cluster_yellow_status(client, wait_between_tries=10, max_tries=10):
             time.sleep(wait_between_tries)
 
 
-def _create_indexes_if_needed(client):
+def create_indexes_if_needed(client):
     """
     Checks if all indeces exist in the client. Otherwise, creates the missing
     ones with their settings and mappings.
@@ -367,11 +367,39 @@ def search_all_results(client, body, index=None, doc_type=None, **query_params):
     return results
 
 
-def index_aip(client, uuid, name, filePath, pathToMETS, size=None, aips_in_aic=None, identifiers=[], encrypted=False):
+def index_aip_and_files(client, uuid, path, mets_path, name, size=None, aips_in_aic=None, identifiers=[], encrypted=False, printfn=print):
+    """
+    Index AIP and AIP files with UUID `uuid` at path `path`.
 
-    tree = ElementTree.parse(pathToMETS)
+    :param client: The ElasticSearch client.
+    :param uuid: The UUID of the AIP we're indexing.
+    :param path: path on disk where the AIP is located.
+    :param path: path on disk where the AIP's METS file is located.
+    :param name: AIP name.
+    :param size: optional AIP size.
+    :param aips_in_aic: optional number of AIPs stored in AIC.
+    :param identifiers: optional additional identifiers (MODS, Islandora, etc.).
+    :param identifiers: optional AIP encrypted boolean (defaults to `False`).
+    :param printfn: optional print funtion.
+    :return: 0 is succeded, 1 otherwise.
+    """
+    # Stop if AIP or METS file don't not exist
+    error_message = None
+    if not os.path.exists(path):
+        error_message = 'AIP does not exist at: ' + path
+    if not os.path.exists(mets_path):
+        error_message = 'METS file does not exist at: ' + mets_path
+    if error_message:
+        logger.error(error_message)
+        printfn(error_message, file=sys.stderr)
+        return 1
 
-    # TODO add a conditional to toggle this
+    printfn('AIP UUID: ' + uuid)
+    printfn('Indexing AIP ...')
+
+    tree = ElementTree.parse(mets_path)
+
+    # TODO: Add a conditional to toggle this
     remove_tool_output_from_mets(tree)
 
     root = tree.getroot()
@@ -381,16 +409,16 @@ def index_aip(client, uuid, name, filePath, pathToMETS, size=None, aips_in_aic=N
     dublincore = root.find('mets:dmdSec/mets:mdWrap/mets:xmlData/dcterms:dublincore', namespaces=ns.NSMAP)
     if dublincore is not None:
         aip_type = dublincore.findtext('dc:type', namespaces=ns.NSMAP) or dublincore.findtext('dcterms:type', namespaces=ns.NSMAP)
-        if aip_type == "Archival Information Collection":
+        if aip_type == 'Archival Information Collection':
             aic_identifier = dublincore.findtext('dc:identifier', namespaces=ns.NSMAP) or dublincore.findtext('dcterms:identifier', namespaces=ns.NSMAP)
         is_part_of = dublincore.findtext('dcterms:isPartOf', namespaces=ns.NSMAP)
 
-    # convert METS XML to dict
+    # Convert METS XML to dict
     xml = ElementTree.tostring(root)
     mets_data = rename_dict_keys_with_child_dicts(normalize_dict_values(xmltodict.parse(xml)))
 
     # Pull the create time from the METS header
-    mets_hdr = root.find("mets:metsHdr", namespaces=ns.NSMAP)
+    mets_hdr = root.find('mets:metsHdr', namespaces=ns.NSMAP)
     mets_created_attr = mets_hdr.get('CREATEDATE')
 
     created = time.time()
@@ -399,13 +427,13 @@ def index_aip(client, uuid, name, filePath, pathToMETS, size=None, aips_in_aic=N
         try:
             created = calendar.timegm(time.strptime(mets_created_attr, '%Y-%m-%dT%H:%M:%S'))
         except ValueError:
-            print("Failed to parse METS CREATEDATE: %s" % (mets_created_attr))
+            printfn('Failed to parse METS CREATEDATE: %s' % (mets_created_attr))
 
-    aipData = {
+    aip_data = {
         'uuid': uuid,
         'name': name,
-        'filePath': filePath,
-        'size': (size or os.path.getsize(filePath)) / 1024 / 1024,
+        'filePath': path,
+        'size': (size or os.path.getsize(path)) / 1024 / 1024,
         'mets': mets_data,
         'origin': get_dashboard_uuid(),
         'created': created,
@@ -416,101 +444,44 @@ def index_aip(client, uuid, name, filePath, pathToMETS, size=None, aips_in_aic=N
         'transferMetadata': _extract_transfer_metadata(root),
         'encrypted': encrypted
     }
-    wait_for_cluster_yellow_status(client)
-    try_to_index(client, aipData, 'aips', 'aip')
+    _wait_for_cluster_yellow_status(client)
+    _try_to_index(client, aip_data, 'aips', printfn=printfn)
+    printfn('Done.')
 
+    printfn('Indexing AIP files ...')
+    files_indexed = _index_aip_files(
+        client=client,
+        uuid=uuid,
+        mets_path=mets_path,
+        name=name,
+        identifiers=identifiers,
+        printfn=printfn,
+    )
 
-def try_to_index(client, data, index, doc_type, wait_between_tries=10, max_tries=10, printfn=print):
-    if max_tries < 1:
-        raise ValueError("max_tries must be 1 or greater")
-    for _ in xrange(0, max_tries):
-        try:
-            return client.index(body=data, index=index, doc_type=doc_type)
-        except Exception as e:
-            printfn("ERROR: error trying to index.")
-            printfn(e)
-            time.sleep(wait_between_tries)
-
-    # If indexing did not succeed after max_tries is already complete,
-    # reraise the Elasticsearch exception to aid in debugging.
-    raise
-
-
-def get_aip_data(client, uuid, fields=None):
-    search_params = {
-        'body': {
-            'query': {'term': {'uuid': uuid}}
-        },
-        'index': 'aips'
-    }
-
-    if fields:
-        search_params['fields'] = fields
-
-    aips = client.search(**search_params)
-
-    return aips['hits']['hits'][0]
-
-
-def index_files(client, index, type_, uuid, pathToArchive, identifiers=[], sipName=None, status='', printfn=print):
-    """
-    Only used in clientScripts/* and prints to stdout/stderr.
-    """
-    # Stop if transfer file does not exist
-    if not os.path.exists(pathToArchive):
-        error_message = "Directory does not exist: " + pathToArchive
-        logger.warning(error_message)
-        printfn(error_message, file=sys.stderr)
-        return 1
-
-    # Use METS file if indexing an AIP
-    metsFilePath = os.path.join(pathToArchive, 'METS.{}.xml'.format(uuid))
-
-    # Index AIP
-    if os.path.isfile(metsFilePath):
-        files_indexed = index_mets_file_metadata(
-            client,
-            uuid,
-            metsFilePath,
-            index,
-            type_,
-            sipName,
-            identifiers=identifiers
-        )
-
-    # Index transfer
-    else:
-        files_indexed = index_transfer_files(
-            client,
-            uuid,
-            pathToArchive,
-            index,
-            type_,
-            status=status,
-            printfn=printfn
-        )
-
-        index_transfer(client, uuid, files_indexed, status=status, printfn=printfn)
-
-    printfn(type_ + ' UUID: ' + uuid)
     printfn('Files indexed: ' + str(files_indexed))
     return 0
 
 
-def _extract_transfer_metadata(doc):
-    return [xmltodict.parse(ElementTree.tostring(el))['transfer_metadata']
-            for el in doc.findall("mets:amdSec/mets:sourceMD/mets:mdWrap/mets:xmlData/transfer_metadata", namespaces=ns.NSMAP)]
+def _index_aip_files(client, uuid, mets_path, name, identifiers=[], printfn=print):
+    """
+    Index AIP files from AIP with UUID `uuid` and METS at path `mets_path`.
 
-
-def index_mets_file_metadata(client, uuid, metsFilePath, index, type_, sipName, identifiers=[]):
-    # parse XML
-    tree = ElementTree.parse(metsFilePath)
+    :param client: The ElasticSearch client.
+    :param uuid: The UUID of the AIP we're indexing.
+    :param mets_path: path on disk where the AIP's METS file is located.
+    :param name: AIP name.
+    :param identifiers: optional additional identifiers (MODS, Islandora, etc.).
+    :param printfn: optional print funtion.
+    :return: number of files indexed.
+    """
+    # Parse XML
+    tree = ElementTree.parse(mets_path)
     root = tree.getroot()
 
-    # TODO add a conditional to toggle this
+    # TODO: Add a conditional to toggle this
     remove_tool_output_from_mets(tree)
 
-    # get SIP-wide dmdSec
+    # Get SIP-wide dmdSec
     dmdSec = root.findall("mets:dmdSec/mets:mdWrap/mets:xmlData", namespaces=ns.NSMAP)
     dmdSecData = {}
     for item in dmdSec:
@@ -528,11 +499,11 @@ def index_mets_file_metadata(client, uuid, metsFilePath, index, type_, sipName, 
         elif aip_type == "Archival Information Package":
             is_part_of = dublincore.findtext('dcterms:isPartOf', namespaces=ns.NSMAP)
 
-    # establish structure to be indexed for each file item
+    # Establish structure to be indexed for each file item
     fileData = {
         'archivematicaVersion': version.get_version(),
         'AIPUUID': uuid,
-        'sipName': sipName,
+        'sipName': name,
         'FILEUUID': '',
         'indexedAt': time.time(),
         'filePath': '',
@@ -588,17 +559,201 @@ def index_mets_file_metadata(client, uuid, metsFilePath, index, type_, sipName, 
         if fileExtension:
             indexData['fileExtension'] = fileExtension[1:].lower()
 
-        # index data
-        wait_for_cluster_yellow_status(client)
-        try_to_index(client, indexData, index, type_)
+        # Index data
+        _wait_for_cluster_yellow_status(client)
+        _try_to_index(client, indexData, 'aipfiles', printfn=printfn)
 
         # Reset fileData['METS']['amdSec'], since it is updated in the loop
         # above. See http://stackoverflow.com/a/3975388 for explanation
         fileData['METS']['amdSec'] = {}
 
-    print('Indexed AIP files and corresponding METS XML.')
-
     return len(files)
+
+
+def index_transfer_and_files(client, uuid, path, status='', printfn=print):
+    """
+    Indexes Transfer and Transfer files with UUID `uuid` at path `path`.
+
+    :param client: The ElasticSearch client.
+    :param uuid: The UUID of the transfer we're indexing.
+    :param path: path on disk, including the transfer directory and a
+                 trailing / but not including objects/.
+    :param status: optional Transfer status.
+    :param printfn: optional print funtion.
+    :return: 0 is succeded, 1 otherwise.
+    """
+    # Stop if Transfer does not exist
+    if not os.path.exists(path):
+        error_message = 'Transfer does not exist at: ' + path
+        logger.error(error_message)
+        printfn(error_message, file=sys.stderr)
+        return 1
+
+    printfn('Transfer UUID: ' + uuid)
+    printfn('Indexing Transfer files ...')
+    files_indexed = _index_transfer_files(
+        client,
+        uuid,
+        path,
+        status=status,
+        printfn=printfn
+    )
+
+    printfn('Files indexed: ' + str(files_indexed))
+    printfn('Indexing Transfer ...')
+
+    try:
+        transfer = Transfer.objects.get(uuid=uuid)
+        transfer_name = transfer.currentlocation.split('/')[-2]
+    except Transfer.DoesNotExist:
+        transfer_name = ''
+
+    transfer_data = {
+        'name': transfer_name,
+        'status': status,
+        'ingest_date': str(datetime.datetime.today())[0:10],
+        'file_count': files_indexed,
+        'uuid': uuid,
+        'pending_deletion': False,
+    }
+
+    _wait_for_cluster_yellow_status(client)
+    _try_to_index(client, transfer_data, 'transfers', printfn=printfn)
+    printfn('Done.')
+
+    return 0
+
+
+def _index_transfer_files(client, uuid, path, status='', printfn=print):
+    """
+    Indexes files in the Transfer with UUID `uuid` at path `path`.
+
+    :param client: ElasticSearch client.
+    :param uuid: UUID of the Transfer in the DB.
+    :param path: path on disk, including the transfer directory and a
+                 trailing / but not including objects/.
+    :param status: optional Transfer status.
+    :param printfn: optional print funtion.
+    :return: number of files indexed.
+    """
+    files_indexed = 0
+    ingest_date = str(datetime.datetime.today())[0:10]
+
+    # Some files should not be indexed
+    # This should match the basename of the file
+    ignore_files = [
+        'processingMCP.xml',
+    ]
+
+    # Get accessionId and name from Transfers table using UUID
+    try:
+        transfer = Transfer.objects.get(uuid=uuid)
+        accession_id = transfer.accessionid
+        transfer_name = transfer.currentlocation.split('/')[-2]
+    except Transfer.DoesNotExist:
+        accession_id = transfer_name = ''
+
+    # Get dashboard UUID
+    dashboard_uuid = get_dashboard_uuid()
+
+    for filepath in list_files_in_dir(path):
+        if os.path.isfile(filepath):
+            # Get file UUID
+            file_uuid = ''
+            modification_date = ''
+            relative_path = filepath.replace(path, '%transferDirectory%')
+            try:
+                f = File.objects.get(currentlocation=relative_path,
+                                     transfer_id=uuid)
+                file_uuid = f.uuid
+                formats = _get_file_formats(f)
+                bulk_extractor_reports = _list_bulk_extractor_reports(path, file_uuid)
+                if f.modificationtime is not None:
+                    modification_date = f.modificationtime.strftime('%Y-%m-%d')
+            except File.DoesNotExist:
+                file_uuid = ''
+                formats = []
+                bulk_extractor_reports = []
+
+            # Get file path info
+            relative_path = relative_path.replace('%transferDirectory%', transfer_name + '/')
+            file_extension = os.path.splitext(filepath)[1][1:].lower()
+            filename = os.path.basename(filepath)
+            # Size in megabytes
+            size = os.path.getsize(filepath) / (1024 * 1024)
+            create_time = os.stat(filepath).st_ctime
+
+            if filename not in ignore_files:
+                printfn('Indexing {} (UUID: {})'.format(relative_path, file_uuid))
+
+                # TODO: Index Backlog Location UUID?
+                indexData = {
+                    'filename': filename,
+                    'relative_path': relative_path,
+                    'fileuuid': file_uuid,
+                    'sipuuid': uuid,
+                    'accessionid': accession_id,
+                    'status': status,
+                    'origin': dashboard_uuid,
+                    'ingestdate': ingest_date,
+                    'created': create_time,
+                    'modification_date': modification_date,
+                    'size': size,
+                    'tags': [],
+                    'file_extension': file_extension,
+                    'bulk_extractor_reports': bulk_extractor_reports,
+                    'format': formats,
+                }
+
+                _wait_for_cluster_yellow_status(client)
+                _try_to_index(client, indexData, 'transferfiles', printfn=printfn)
+
+                files_indexed = files_indexed + 1
+            else:
+                printfn('Skipping indexing {}'.format(relative_path))
+
+    return files_indexed
+
+
+def _try_to_index(client, data, index, wait_between_tries=10, max_tries=10, printfn=print):
+    exception = None
+    if max_tries < 1:
+        raise ValueError('max_tries must be 1 or greater')
+    for _ in xrange(0, max_tries):
+        try:
+            client.index(body=data, index=index, doc_type=DOC_TYPE)
+            return
+        except Exception as e:
+            exception = e
+            printfn('ERROR: error trying to index.')
+            printfn(e)
+            time.sleep(wait_between_tries)
+
+    # If indexing did not succeed after max_tries is already complete,
+    # reraise the Elasticsearch exception to aid in debugging.
+    if exception:
+        raise exception
+
+
+def get_aip_data(client, uuid, fields=None):
+    search_params = {
+        'body': {
+            'query': {'term': {'uuid': uuid}}
+        },
+        'index': 'aips'
+    }
+
+    if fields:
+        search_params['fields'] = fields
+
+    aips = client.search(**search_params)
+
+    return aips['hits']['hits'][0]
+
+
+def _extract_transfer_metadata(doc):
+    return [xmltodict.parse(ElementTree.tostring(el))['transfer_metadata']
+            for el in doc.findall("mets:amdSec/mets:sourceMD/mets:mdWrap/mets:xmlData/transfer_metadata", namespaces=ns.NSMAP)]
 
 
 # To avoid Elasticsearch schema collisions, if a dict value is itself a
@@ -681,128 +836,6 @@ def _list_bulk_extractor_reports(transfer_path, file_uuid):
             reports.append(report)
 
     return reports
-
-
-def index_transfer(client, uuid, file_count, status='', printfn=print):
-    """
-    Indexes transfer with UUID `uuid`
-
-    :param client: The ElasticSearch client
-    :param uuid: The UUID of the transfer we're indexing
-    :param file_count: The number of files in this transfer
-    :return: None
-    """
-    try:
-        transfer = Transfer.objects.get(uuid=uuid)
-        transfer_name = transfer.currentlocation.split('/')[-2]
-    except Transfer.DoesNotExist:
-        transfer_name = ''
-
-    transfer_data = {
-        'name': transfer_name,
-        'status': status,
-        'ingest_date': str(datetime.datetime.today())[0:10],
-        'file_count': file_count,
-        'uuid': uuid,
-        'pending_deletion': False,
-    }
-
-    wait_for_cluster_yellow_status(client)
-    try_to_index(client, transfer_data, 'transfers', 'transfer', printfn=printfn)
-
-
-def index_transfer_files(client, uuid, pathToTransfer, index, type_, status='', printfn=print):
-    """
-    Indexes files in the Transfer with UUID `uuid` at path `pathToTransfer`.
-
-    Returns the number of files indexed.
-
-    client: ElasticSearch client
-    uuid: UUID of the Transfer in the DB
-    pathToTransfer: path on disk, including the transfer directory and a
-        trailing / but not including objects/
-    index, type: index and type in ElasticSearch
-    """
-    files_indexed = 0
-    ingest_date = str(datetime.datetime.today())[0:10]
-
-    # Some files should not be indexed
-    # This should match the basename of the file
-    ignore_files = [
-        'processingMCP.xml',
-    ]
-
-    # Get accessionId and name from Transfers table using UUID
-    try:
-        transfer = Transfer.objects.get(uuid=uuid)
-        accession_id = transfer.accessionid
-        transfer_name = transfer.currentlocation.split('/')[-2]
-    except Transfer.DoesNotExist:
-        accession_id = transfer_name = ''
-
-    # Get dashboard UUID
-    dashboard_uuid = get_dashboard_uuid()
-
-    for filepath in list_files_in_dir(pathToTransfer):
-        if os.path.isfile(filepath):
-            # Get file UUID
-            file_uuid = ''
-            modification_date = ''
-            relative_path = filepath.replace(pathToTransfer, '%transferDirectory%')
-            try:
-                f = File.objects.get(currentlocation=relative_path,
-                                     transfer_id=uuid)
-                file_uuid = f.uuid
-                formats = _get_file_formats(f)
-                bulk_extractor_reports = _list_bulk_extractor_reports(pathToTransfer, file_uuid)
-                if f.modificationtime is not None:
-                    modification_date = f.modificationtime.strftime('%Y-%m-%d')
-            except File.DoesNotExist:
-                file_uuid = ''
-                formats = []
-                bulk_extractor_reports = []
-
-            # Get file path info
-            relative_path = relative_path.replace('%transferDirectory%', transfer_name + '/')
-            file_extension = os.path.splitext(filepath)[1][1:].lower()
-            filename = os.path.basename(filepath)
-            # Size in megabytes
-            size = os.path.getsize(filepath) / (1024 * 1024)
-            create_time = os.stat(filepath).st_ctime
-
-            if filename not in ignore_files:
-                printfn('Indexing {} (UUID: {})'.format(relative_path, file_uuid))
-
-                # TODO Index Backlog Location UUID?
-                indexData = {
-                    'filename': filename,
-                    'relative_path': relative_path,
-                    'fileuuid': file_uuid,
-                    'sipuuid': uuid,
-                    'accessionid': accession_id,
-                    'status': status,
-                    'origin': dashboard_uuid,
-                    'ingestdate': ingest_date,
-                    'created': create_time,
-                    'modification_date': modification_date,
-                    'size': size,
-                    'tags': [],
-                    'file_extension': file_extension,
-                    'bulk_extractor_reports': bulk_extractor_reports,
-                    'format': formats,
-                }
-
-                wait_for_cluster_yellow_status(client)
-                try_to_index(client, indexData, index, type_)
-
-                files_indexed = files_indexed + 1
-            else:
-                printfn('Skipping indexing {}'.format(relative_path))
-
-    if files_indexed > 0:
-        client.indices.refresh()
-
-    return files_indexed
 
 
 def list_files_in_dir(path, filepaths=[]):

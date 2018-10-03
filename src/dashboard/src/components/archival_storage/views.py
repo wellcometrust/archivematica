@@ -108,8 +108,7 @@ def search(request):
             # Searching for AIPs still actually searches type 'aipfile', and
             # returns the UUID of the AIP the files are a part of.  To search
             # for an attribute of an AIP, the aipfile must index that
-            # information about their AIP in
-            # elasticSearchFunctions.index_mets_file_metadata
+            # information about their AIP.
             results = es_client.search(
                 body=query,
                 index='aips',

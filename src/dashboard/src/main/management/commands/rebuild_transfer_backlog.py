@@ -94,14 +94,17 @@ class Command(DashboardCommand):
 
     def delete_index(self, es_client):
         """Delete search index."""
-        self.stdout.write('Deleting all transfers in the "transfers" index...')
+        self.stdout.write(
+            'Deleting all transfers and transfer files '
+            'in the "transfers" and "transferfiles" indexes ...'
+        )
         time.sleep(3)  # Time for the user to panic and kill the process.
-        es_client.indices.delete('transfers', ignore=404)
+        es_client.indices.delete('transfers,transferfiles', ignore=404)
 
     def create_index(self, es_client):
         """Create search index."""
-        self.stdout.write('Creating index...')
-        elasticSearchFunctions.create_transfers_index(es_client)
+        self.stdout.write('Creating indexes ...')
+        elasticSearchFunctions.create_indexes_if_needed(es_client)
 
     def populate_index(self, es_client, transfer_backlog_dir):
         """Populate search index."""
@@ -122,16 +125,11 @@ class Command(DashboardCommand):
             self.stdout.write('Indexing {} ({})'.format(
                 transfer_uuid, transfer_dir))
 
-            self.index_files(es_client,
-                             os.path.join(transfer_backlog_dir, directory),
-                             transfer_uuid)
-            storageService.reindex_file(transfer_uuid)
+            elasticSearchFunctions.index_transfer_and_files(
+                es_client,
+                transfer_uuid,
+                os.path.join(transfer_backlog_dir, directory, ''),
+                status='backlog',
+            )
 
-    def index_files(self, es_client, transfer_path, transfer_uuid):
-        transfer_path = elasticSearchFunctions.index_files(
-            es_client,
-            'transfers',
-            'transferfile',
-            transfer_uuid,
-            os.path.join(transfer_path, ''),  # Expected by index_files().
-            status='backlog')
+            storageService.reindex_file(transfer_uuid)

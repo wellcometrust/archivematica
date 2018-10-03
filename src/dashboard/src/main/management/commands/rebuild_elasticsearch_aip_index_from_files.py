@@ -158,23 +158,14 @@ def processAIPThenDeleteMETSFile(path, temp_dir, es_client,
     aip_info = storage_service.get_file_info(uuid=aip_uuid)
 
     if aip_info:
-        elasticSearchFunctions.index_aip(
+        elasticSearchFunctions.index_aip_and_files(
             client=es_client,
             uuid=aip_uuid,
+            path=path,
+            mets_path=path_to_mets,
             name=aip_name,
-            filePath=path,
-            pathToMETS=path_to_mets,
-            aips_in_aic=aips_in_aic,
-            identifiers=[],  # TODO get these
             size=aip_info[0]['size'],
-        )
-        elasticSearchFunctions.index_mets_file_metadata(
-            client=es_client,
-            uuid=aip_uuid,
-            metsFilePath=path_to_mets,
-            index='aips',
-            type_='aipfile',
-            sipName=aip_name,
+            aips_in_aic=aips_in_aic,
             identifiers=[],  # TODO get these
         )
 
@@ -234,7 +225,7 @@ class Command(DashboardCommand):
         if options['delete_all']:
             print('Deleting all AIPs in the AIP index')
             time.sleep(3)  # Time for the user to panic and kill the process
-            es_client.indices.delete('aips', ignore=404)
+            es_client.indices.delete('aips,aipfiles', ignore=404)
             elasticSearchFunctions.create_indexes_if_needed(es_client)
 
         if not options['uuid']:
