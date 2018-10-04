@@ -416,18 +416,10 @@ def aip_file_count(es_client):
 def total_size_of_aips(es_client):
     query = elasticsearch_query_excluding_aips_pending_deletion('uuid')
     query['_source'] = 'size'
-    # FIXME
-    query['facets'] = {
-        'total': {
-            'statistical': {
-                'field': 'size'
-            }
-        }
-    }
-
+    query['aggs'] = {'total': {'sum': {'field': 'size'}}}
     results = es_client.search(body=query, index='aips')
     # TODO handle the return object
-    total_size = results['facets']['total']['total']
+    total_size = results['aggregations']['total']['value']
     total_size = '{0:.2f}'.format(total_size)
     return total_size
 
