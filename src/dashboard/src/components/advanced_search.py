@@ -128,12 +128,12 @@ def assemble_query(es_client, queries, ops, fields, types, search_index=None, **
         index = index + 1
 
     return {
-        "filter": filters,
         "query": {
             "bool": {
                 "must": must_haves,
                 "must_not": must_not_haves,
                 "should": should_haves,
+                "filter": filters,
             }
         },
     }

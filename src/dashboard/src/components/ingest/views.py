@@ -593,8 +593,8 @@ def transfer_backlog(request, ui):
         backlog_filter = elasticSearchFunctions.BACKLOG_FILTER_NO_MD_LOGS
 
     if 'query' not in request.GET:
-        query = elasticSearchFunctions.MATCH_ALL_QUERY.copy()
-        query['filter'] = backlog_filter
+        # Use backlog boolean filter as boolean query
+        query = {'query': backlog_filter}
     else:
         queries, ops, fields, types = advanced_search.search_parameter_prep(request)
 
