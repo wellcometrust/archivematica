@@ -415,7 +415,7 @@ def aip_file_count(es_client):
 
 def total_size_of_aips(es_client):
     query = elasticsearch_query_excluding_aips_pending_deletion('uuid')
-    query['fields'] = 'size'
+    query['_source'] = 'size'
     # FIXME
     query['facets'] = {
         'total': {
