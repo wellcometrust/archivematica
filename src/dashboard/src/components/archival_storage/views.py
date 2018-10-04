@@ -102,18 +102,14 @@ def search(request):
         # the results using separate queries)
         if not file_mode:
             # Fetch all unique AIP UUIDs in the returned set of files
-            query['aggs'] = {'aip_uuids': {'terms': {'field': 'AIPUUID', 'size': 0}}}
+            query['aggs'] = {'aip_uuids': {'terms': {'field': 'AIPUUID', 'size': '10000'}}}
             # Don't return results, just the aggregation
             query['size'] = 0
             # Searching for AIPs still actually searches type 'aipfile', and
             # returns the UUID of the AIP the files are a part of.  To search
             # for an attribute of an AIP, the aipfile must index that
             # information about their AIP.
-            results = es_client.search(
-                body=query,
-                index='aipfiles',
-                sort='sipName.raw:desc',
-            )
+            results = es_client.search(body=query, index='aipfiles')
             # Given these AIP UUIDs, now fetch the actual information we want from aips/aip
             buckets = results['aggregations']['aip_uuids']['buckets']
             uuids = [bucket['key'] for bucket in buckets]
