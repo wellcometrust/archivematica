@@ -137,7 +137,7 @@ def search(request):
 
     query = advanced_search.assemble_query(
         es_client, queries, ops, fields, types, search_index='transferfiles',
-        filters={'term': {'status': 'backlog'}}
+        filters=[{'term': {'status': 'backlog'}}],
     )
 
     try:

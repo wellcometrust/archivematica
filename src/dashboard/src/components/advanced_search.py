@@ -109,7 +109,7 @@ def extract_url_search_params_from_request(request):
 
 def assemble_query(es_client, queries, ops, fields, types, search_index=None, **kwargs):
     must_haves = kwargs.get('must_haves', [])
-    filters = kwargs.get('filters', {})
+    filters = kwargs.get('filters', [])
     should_haves = []
     must_not_haves = []
     index = 0
