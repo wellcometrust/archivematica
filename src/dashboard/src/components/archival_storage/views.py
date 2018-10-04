@@ -112,7 +112,7 @@ def search(request):
             results = es_client.search(
                 body=query,
                 index='aipfiles',
-                sort='sipName:desc',
+                sort='sipName.raw:desc',
             )
             # Given these AIP UUIDs, now fetch the actual information we want from aips/aip
             buckets = results['aggregations']['aip_uuids']['buckets']
@@ -127,11 +127,11 @@ def search(request):
             }
             index = 'aips'
             fields = 'name,uuid,size,created,status,AICID,isPartOf,countAIPsinAIC,encrypted'
-            sort = 'name:desc'
+            sort = 'name.raw:desc'
         else:
             index = 'aipfiles'
             fields = 'AIPUUID,filePath,FILEUUID,encrypted'
-            sort = 'sipName:desc'
+            sort = 'sipName.raw:desc'
 
         # To reduce amount of data fetched from ES, use LazyPagedSequence
         def es_pager(page, page_size):

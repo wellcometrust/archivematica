@@ -234,7 +234,7 @@ def _get_aipfiles_index_body():
                     'FILEUUID': MACHINE_READABLE_FIELD_SPEC,
                     'isPartOf': MACHINE_READABLE_FIELD_SPEC,
                     'AICID': MACHINE_READABLE_FIELD_SPEC,
-                    'sipName': {'type': 'text'},
+                    'sipName': SORTABLE_STRING_FIELD_SPEC,
                     'indexedAt': {'type': 'double'},
                     'filePath': {'type': 'text'},
                     'fileExtension': {'type': 'text'},
@@ -252,7 +252,7 @@ def _get_transfers_index_body():
         'mappings': {
             DOC_TYPE: {
                 'properties': {
-                    'name': {'type': 'text'},
+                    'name': SORTABLE_STRING_FIELD_SPEC,
                     'status': {'type': 'text'},
                     'ingest_date': {
                         'type': 'date',
@@ -272,7 +272,7 @@ def _get_transferfiles_index_body():
         'mappings': {
             DOC_TYPE: {
                 'properties': {
-                    'filename': {'type': 'text'},
+                    'filename': SORTABLE_STRING_FIELD_SPEC,
                     'relative_path': {'type': 'text'},
                     'fileuuid': MACHINE_READABLE_FIELD_SPEC,
                     'sipuuid': MACHINE_READABLE_FIELD_SPEC,

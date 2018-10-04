@@ -102,8 +102,8 @@ def get_es_property_from_column_index(index, file_mode):
     :return: The ES document property name corresponding to the column index in the data table.
     """
     table_columns = (
-        ('name', 'uuid', 'file_count', 'ingest_date', None),     # Transfers are being displayed
-        ('filename', 'sipuuid', None)                            # Transfer files are being displayed
+        ('name.raw', 'uuid', 'file_count', 'ingest_date', None),  # Transfers are being displayed
+        ('filename.raw', 'sipuuid', None)                         # Transfer files are being displayed
     )
 
     if index < 0 or index >= len(table_columns[file_mode]):
