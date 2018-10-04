@@ -836,7 +836,7 @@ def _list_files_in_dir(path, filepaths=[]):
 # -------
 
 
-def search_all_results(client, body, index='', **query_params):
+def search_all_results(client, body, index):
     """
     Performs client.search with the size set to MAX_QUERY_SIZE.
 
@@ -851,7 +851,7 @@ def search_all_results(client, body, index='', **query_params):
         body=body,
         index=index,
         size=MAX_QUERY_SIZE,
-        **query_params)
+    )
 
     if results['hits']['total'] > MAX_QUERY_SIZE:
         logger.warning(
