@@ -107,7 +107,7 @@ def extract_url_search_params_from_request(request):
     return search_params
 
 
-def assemble_query(es_client, queries, ops, fields, types, search_index=None, doc_type=None, **kwargs):
+def assemble_query(es_client, queries, ops, fields, types, search_index=None, **kwargs):
     must_haves = kwargs.get('must_haves', [])
     filters = kwargs.get('filters', {})
     should_haves = []
@@ -116,7 +116,7 @@ def assemble_query(es_client, queries, ops, fields, types, search_index=None, do
 
     for query in queries:
         if queries[index] != '':
-            clause = query_clause(es_client, index, queries, ops, fields, types, search_index=search_index, doc_type=doc_type)
+            clause = _query_clause(es_client, index, queries, ops, fields, types, search_index=search_index)
             if clause:
                 if ops[index] == 'not':
                     must_not_haves.append(clause)
@@ -170,7 +170,7 @@ def _normalize_date(date):
         raise ValueError("Invalid date received ({}); ignoring date query".format(date))
 
 
-def filter_search_fields(es_client, search_fields, index=None, doc_type=None):
+def _filter_search_fields(es_client, search_fields, index=None):
     """
     Given search fields which search nested documents with wildcards (such as "transferMetadata.*"), returns a list of subfields filtered to contain only string-type fields.
 
@@ -185,10 +185,8 @@ def filter_search_fields(es_client, search_fields, index=None, doc_type=None):
     :param list search_fields: A list of strings representing nested object names.
     :param str index: The name of the search index, used to look up the mapping document.
         If not provided, the original search_fields is returned unmodified.
-    :param str doc_type: The name of the document type within the search index, used to look up the mapping document.
-        If not provided, the original search_fields is returned unmodified.
     """
-    if index is None or doc_type is None:
+    if index is None:
         return search_fields
 
     new_fields = []
@@ -199,8 +197,9 @@ def filter_search_fields(es_client, search_fields, index=None, doc_type=None):
             continue
         try:
             field_name = field.rsplit('.', 1)[0]
-            mapping = elasticSearchFunctions.get_type_mapping(es_client, index, doc_type)
-            subfields = mapping[doc_type]['properties'][field_name]['properties']
+            # FIXME
+            mapping = elasticSearchFunctions.get_type_mapping(es_client, index)
+            subfields = mapping['properties'][field_name]['properties']
         except KeyError:
             # The requested field doesn't exist in the index, so don't worry about validating subfields
             new_fields.append(field)
@@ -212,11 +211,11 @@ def filter_search_fields(es_client, search_fields, index=None, doc_type=None):
     return new_fields
 
 
-def query_clause(es_client, index, queries, ops, fields, types, search_index=None, doc_type=None):
+def _query_clause(es_client, index, queries, ops, fields, types, search_index=None):
     if fields[index] == '':
         search_fields = []
     else:
-        search_fields = filter_search_fields(es_client, _fix_object_fields([fields[index]]), index=search_index, doc_type=doc_type)
+        search_fields = _filter_search_fields(es_client, _fix_object_fields([fields[index]]), index=search_index)
 
     if types[index] == 'term':
         # a blank term should be ignored because it prevents any results: you
@@ -243,10 +242,8 @@ def query_clause(es_client, index, queries, ops, fields, types, search_index=Non
         return {'range': {fields[index]: {'gte': start, 'lte': end}}}
 
 
-def indexed_count(es_client, index, types=None, query=None):
-    if types is not None:
-        types = ','.join(types)
+def indexed_count(es_client, index, query=None):
     try:
-        return es_client.count(index=index, doc_type=types, body=query)['count']
+        return es_client.count(index=index, body=query)['count']
     except:
         return 0

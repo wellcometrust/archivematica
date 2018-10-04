@@ -616,8 +616,7 @@ def transfer_backlog(request, ui):
         results = elasticSearchFunctions.search_all_results(
             es_client,
             body=query,
-            index='transfers',
-            doc_type='transferfile',
+            index='transferfiles',
         )
     except:
         logger.exception('Error accessing index.')

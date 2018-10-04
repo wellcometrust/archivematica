@@ -836,24 +836,20 @@ def _list_files_in_dir(path, filepaths=[]):
 # -------
 
 
-def search_all_results(client, body, index=None, doc_type=None, **query_params):
+def search_all_results(client, body, index='', **query_params):
     """
     Performs client.search with the size set to MAX_QUERY_SIZE.
 
-    By default search_raw returns only 10 results.  Since we usually want all
+    By default search_raw returns only 10 results. Since we usually want all
     results, this is a wrapper that fetches MAX_QUERY_SIZE results and logs a
     warning if more results were available.
     """
     if isinstance(index, list):
         index = ','.join(index)
 
-    if isinstance(doc_type, list):
-        doc_type = ','.join(doc_type)
-
     results = client.search(
         body=body,
         index=index,
-        doc_type=doc_type,
         size=MAX_QUERY_SIZE,
         **query_params)
 
@@ -881,7 +877,7 @@ def get_aip_data(client, uuid, fields=None):
     return aips['hits']['hits'][0]
 
 
-def _document_ids_from_field_query(client, index, doc_types, field, value):
+def _document_ids_from_field_query(client, index, field, value):
     document_ids = []
 
     # Escape /'s with \\
@@ -896,7 +892,7 @@ def _document_ids_from_field_query(client, index, doc_types, field, value):
     documents = search_all_results(
         client,
         body=query,
-        doc_type=doc_types
+        index=index,
     )
 
     if len(documents['hits']['hits']) > 0:
@@ -905,9 +901,9 @@ def _document_ids_from_field_query(client, index, doc_types, field, value):
     return document_ids
 
 
-def _document_id_from_field_query(client, index, doc_types, field, value):
+def _document_id_from_field_query(client, index, field, value):
     document_id = None
-    ids = _document_ids_from_field_query(client, index, doc_types, field, value)
+    ids = _document_ids_from_field_query(client, index, field, value)
     if len(ids) == 1:
         document_id = ids[0]
     return document_id
@@ -931,8 +927,7 @@ def get_file_tags(client, uuid):
 
     results = client.search(
         body=query,
-        index='transfers',
-        doc_type='transferfile',
+        index='transferfiles',
         fields='tags',
     )
 
@@ -958,7 +953,7 @@ def set_file_tags(client, uuid, tags):
     :param list tags: A list of zero or more tags.
         Passing an empty list clears the file's tags.
     """
-    document_ids = _document_ids_from_field_query(client, 'transfers', ['transferfile'], 'fileuuid', uuid)
+    document_ids = _document_ids_from_field_query(client, 'transferfiles', 'fileuuid', uuid)
 
     count = len(document_ids)
     if count == 0:
@@ -966,15 +961,15 @@ def set_file_tags(client, uuid, tags):
     if count > 1:
         raise TooManyResultsError('{} matches found for file with UUID {}; unable to fetch a single result'.format(count, uuid))
 
-    doc = {
+    body = {
         'doc': {
             'tags': tags,
         }
     }
     client.update(
-        body=doc,
-        index='transfers',
-        doc_type='transferfile',
+        body=body,
+        index='transferfiles',
+        doc_type=DOC_TYPE,
         id=document_ids[0]
     )
     return True
@@ -986,7 +981,6 @@ def get_transfer_file_info(client, field, value):
     """
     logger.debug('get_transfer_file_info: field: %s, value: %s', field, value)
     results = {}
-    indicies = 'transfers'
     query = {
         "query": {
             "term": {
@@ -994,7 +988,7 @@ def get_transfer_file_info(client, field, value):
             }
         }
     }
-    documents = search_all_results(client, body=query, index=indicies)
+    documents = search_all_results(client, body=query, index='transferfiles')
     result_count = len(documents['hits']['hits'])
     if result_count == 1:
         results = documents['hits']['hits'][0]['_source']
@@ -1047,10 +1041,14 @@ def _remove_transfer_files(client, uuid, unit_type=None):
 
     if len(transfers) > 0:
         for transfer in transfers:
-            files = _document_ids_from_field_query(client, 'transfers', ['transferfile'], 'sipuuid', transfer)
+            files = _document_ids_from_field_query(client, 'transferfiles', 'sipuuid', transfer)
             if len(files) > 0:
-                for f in files:
-                    client.delete('transfers', 'transferfile', f)
+                for file_id in files:
+                    client.delete(
+                        index='transferfiles',
+                        doc_type=DOC_TYPE,
+                        id=file_id,
+                    )
     else:
         if not unit_type:
             unit_type = 'transfer or SIP'
@@ -1091,8 +1089,8 @@ def _delete_matching_documents(client, index, field, value):
 # -------
 
 
-def _update_field(client, uuid, index, doc_type, field, status):
-    document_id = _document_id_from_field_query(client, index, [doc_type], 'uuid', uuid)
+def _update_field(client, index, uuid, field, value):
+    document_id = _document_id_from_field_query(client, index, 'uuid', uuid)
 
     if document_id is None:
         logger.error('Unable to find document with UUID {} in index {}'.format(uuid, index))
@@ -1101,25 +1099,25 @@ def _update_field(client, uuid, index, doc_type, field, status):
     client.update(
         body={
             'doc': {
-                field: status
+                field: value
             }
         },
         index=index,
-        doc_type=doc_type,
-        id=document_id
+        doc_type=DOC_TYPE,
+        id=document_id,
     )
 
 
 def mark_aip_deletion_requested(client, uuid):
-    _update_field(client, uuid, 'aips', 'aip', 'status', 'DEL_REQ')
+    _update_field(client, 'aips', uuid, 'status', 'DEL_REQ')
 
 
 def mark_aip_stored(client, uuid):
-    _update_field(client, uuid, 'aips', 'aip', 'status', 'UPLOADED')
+    _update_field(client, 'aips', uuid, 'status', 'UPLOADED')
 
 
 def mark_backlog_deletion_requested(client, uuid):
-    _update_field(client, uuid, 'transfers', 'transfer', 'pending_deletion', True)
+    _update_field(client, 'transfers', uuid, 'pending_deletion', True)
 
 
 # ---------------

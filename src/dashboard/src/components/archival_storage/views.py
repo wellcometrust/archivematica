@@ -95,7 +95,7 @@ def search(request):
     # perform search
     es_client = elasticSearchFunctions.get_client()
     results = None
-    query = advanced_search.assemble_query(es_client, queries, ops, fields, types, search_index='aips', doc_type='aipfile')
+    query = advanced_search.assemble_query(es_client, queries, ops, fields, types, search_index='aipfiles')
     try:
         # use all results to pull transfer facets if not in file mode
         # pulling only one field (we don't need field data as we augment
@@ -111,8 +111,7 @@ def search(request):
             # information about their AIP.
             results = es_client.search(
                 body=query,
-                index='aips',
-                doc_type='aipfile',
+                index='aipfiles',
                 sort='sipName:desc',
             )
             # Given these AIP UUIDs, now fetch the actual information we want from aips/aip
@@ -127,12 +126,10 @@ def search(request):
                 },
             }
             index = 'aips'
-            doc_type = 'aip'
             fields = 'name,uuid,size,created,status,AICID,isPartOf,countAIPsinAIC,encrypted'
             sort = 'name:desc'
         else:
-            index = 'aips'
-            doc_type = 'aipfile'
+            index = 'aipfiles'
             fields = 'AIPUUID,filePath,FILEUUID,encrypted'
             sort = 'sipName:desc'
 
@@ -151,7 +148,6 @@ def search(request):
                 from_=start,
                 size=page_size,
                 index=index,
-                doc_type=doc_type,
                 fields=fields,
                 sort=sort,
             )
@@ -159,7 +155,10 @@ def search(request):
                 return search_augment_file_results(es_client, results)
             else:
                 return search_augment_aip_results(results, uuid_file_counts)
-        count = es_client.count(index=index, doc_type=doc_type, body={'query': query['query']})['count']
+        count = es_client.count(
+            index=index,
+            body={'query': query['query']}
+        )['count']
         results = LazyPagedSequence(es_pager, items_per_page, count)
 
     except ElasticsearchException:
@@ -269,7 +268,6 @@ def create_aic(request, *args, **kwargs):
         results = es_client.search(
             body=query,
             index='aips',
-            doc_type='aip',
             fields='uuid,name',
             size=elasticSearchFunctions.MAX_QUERY_SIZE,  # return all records
         )
@@ -412,12 +410,13 @@ def elasticsearch_query_excluding_aips_pending_deletion(uuid_field_name):
 
 def aip_file_count(es_client):
     query = elasticsearch_query_excluding_aips_pending_deletion('AIPUUID')
-    return advanced_search.indexed_count(es_client, 'aips', ['aipfile'], query)
+    return advanced_search.indexed_count(es_client, 'aipfiles', query)
 
 
 def total_size_of_aips(es_client):
     query = elasticsearch_query_excluding_aips_pending_deletion('uuid')
     query['fields'] = 'size'
+    # FIXME
     query['facets'] = {
         'total': {
             'statistical': {
@@ -426,7 +425,7 @@ def total_size_of_aips(es_client):
         }
     }
 
-    results = es_client.search(body=query, doc_type='aip', index='aips')
+    results = es_client.search(body=query, index='aips')
     # TODO handle the return object
     total_size = results['facets']['total']['total']
     total_size = '{0:.2f}'.format(total_size)
@@ -478,7 +477,6 @@ def list_display(request):
     deleted_aip_results = es_client.search(
         body=query,
         index='aips',
-        doc_type='aip',
         fields='uuid,status'
     )
     for deleted_aip in deleted_aip_results['hits']['hits']:
@@ -496,7 +494,6 @@ def list_display(request):
         start = (page - 1) * page_size
         results = es_client.search(
             index='aips',
-            doc_type='aip',
             body=elasticSearchFunctions.MATCH_ALL_QUERY,
             fields='origin,uuid,filePath,created,name,size,encrypted',
             sort=sort_specification,
@@ -509,7 +506,10 @@ def list_display(request):
         return [elasticSearchFunctions.normalize_results_dict(d) for d in results['hits']['hits']]
 
     items_per_page = 10
-    count = es_client.count(index='aips', doc_type='aip', body=elasticSearchFunctions.MATCH_ALL_QUERY)['count']
+    count = es_client.count(
+        index='aips',
+        body=elasticSearchFunctions.MATCH_ALL_QUERY,
+    )['count']
     results = LazyPagedSequence(es_pager, page_size=items_per_page, length=count)
 
     # Paginate

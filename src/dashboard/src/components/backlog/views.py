@@ -60,7 +60,6 @@ def check_and_remove_deleted_transfers(es_client):
     deletion_pending_results = es_client.search(
         body=query,
         index='transfers',
-        doc_type='transfer',
         fields='uuid,status'
     )
 
@@ -137,13 +136,13 @@ def search(request):
         queries, ops, fields, types = (['*'], ['or'], [''], ['term'])
 
     query = advanced_search.assemble_query(
-        es_client, queries, ops, fields, types, search_index='transfers',
-        doc_type='transferfile', filters={'term': {'status': 'backlog'}}
+        es_client, queries, ops, fields, types, search_index='transferfiles',
+        filters={'term': {'status': 'backlog'}}
     )
 
     try:
         if file_mode:
-            doc_type = 'transferfile'
+            index = 'transferfiles'
             source = 'filename,sipuuid,relative_path'
         else:  # Transfer mode
             # Query to transfers/transferfile, but only fetch & aggregrate transfer UUIDs
@@ -152,8 +151,7 @@ def search(request):
             # (https://stackoverflow.com/questions/22927098/show-all-elasticsearch-aggregation-results-buckets-and-not-just-10)
             query['aggs'] = {'transfer_uuid': {'terms': {'field': 'sipuuid', 'size': '10000'}}}
             hits = es_client.search(
-                index='transfers',
-                doc_type='transferfile',
+                index='transferfiles',
                 body=query,
                 size=0,  # Don't return results, only aggregation
             )
@@ -164,13 +162,12 @@ def search(request):
                     'uuid': uuids,
                 },
             }
-            doc_type = 'transfer'
+            index = 'transfers'
             source = 'name,uuid,file_count,ingest_date'
 
-        hit_count = es_client.search(index='transfers', doc_type=doc_type, body=query, search_type='count')['hits']['total']
+        hit_count = es_client.search(index=index, body=query, search_type='count')['hits']['total']
         hits = es_client.search(
-            index='transfers',
-            doc_type=doc_type,
+            index=index,
             body=query,
             from_=start,
             size=page_size,
