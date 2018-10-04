@@ -188,19 +188,19 @@ def search(request):
 def _get_es_field(record, field, default=None):
     if field not in record or not record[field]:
         return default
-    return record[field][0]
+    return record[field]
 
 
 def search_augment_aip_results(raw_results, counts):
     modified_results = []
 
     for item in raw_results['hits']['hits']:
-        fields = item['fields']
+        fields = item['_source']
         new_item = {
-            'name': fields['name'][0],
-            'uuid': fields['uuid'][0],
-            'count': counts[fields['uuid'][0]],
-            'created': fields['created'][0],
+            'name': fields['name'],
+            'uuid': fields['uuid'],
+            'count': counts[fields['uuid']],
+            'created': fields['created'],
             'isPartOf': _get_es_field(fields, 'isPartOf'),
             'AICID': _get_es_field(fields, 'AICID'),
             'countAIPsinAIC': _get_es_field(fields, 'countAIPsinAIC', '(unknown)'),
@@ -221,10 +221,10 @@ def search_augment_file_results(es_client, raw_results):
     modifiedResults = []
 
     for item in raw_results['hits']['hits']:
-        if 'fields' not in item:
+        if '_source' not in item:
             continue
 
-        clone = {k: v[0] for k, v in item['fields'].copy().items()}
+        clone = item['_source'].copy()
 
         # try to find AIP details in database
         try:
@@ -232,9 +232,9 @@ def search_augment_file_results(es_client, raw_results):
             aip = elasticSearchFunctions.get_aip_data(es_client, clone['AIPUUID'], fields='uuid,name,filePath,size,origin,created,encrypted')
 
             # augment result data
-            clone['sipname'] = aip['fields']['name'][0]
+            clone['sipname'] = aip['_source']['name']
             clone['fileuuid'] = clone['FILEUUID']
-            clone['href'] = aip['fields']['filePath'][0].replace(AIPSTOREPATH + '/', "AIPsStore/")
+            clone['href'] = aip['_source']['filePath'].replace(AIPSTOREPATH + '/', "AIPsStore/")
 
         except:
             aip = None
@@ -293,10 +293,10 @@ def create_aic(request, *args, **kwargs):
 
         # Create files with filename = AIP UUID, and contents = AIP name
         for aip in results['hits']['hits']:
-            filepath = os.path.join(destination, aip['fields']['uuid'][0])
+            filepath = os.path.join(destination, aip['_source']['uuid'])
             with open(filepath, 'w') as f:
                 os.chmod(filepath, 0o660)
-                f.write(str(aip['fields']['name'][0]))
+                f.write(str(aip['_source']['name']))
 
         return redirect('components.ingest.views.aic_metadata_add', temp_uuid)
     else:
@@ -319,7 +319,7 @@ def aip_file_download(request, uuid):
     sipuuid = helpers.get_file_sip_uuid(uuid)
     es_client = elasticSearchFunctions.get_client()
     aip = elasticSearchFunctions.get_aip_data(es_client, sipuuid, fields='uuid,name,filePath,size,origin,created')
-    aip_filepath = aip['fields']['filePath'][0]
+    aip_filepath = aip['_source']['filePath']
 
     # work out path components
     aip_archive_filename = os.path.basename(aip_filepath)
@@ -340,7 +340,7 @@ def aip_file_download(request, uuid):
         file_basename
     )
 
-    redirect_url = storage_service.extract_file_url(aip['fields']['uuid'][0], file_relative_path)
+    redirect_url = storage_service.extract_file_url(aip['_source']['uuid'], file_relative_path)
     return helpers.stream_file_from_storage_service(redirect_url, 'Storage service returned {}; check logs?')
 
 
@@ -472,7 +472,7 @@ def list_display(request):
         _source='uuid,status'
     )
     for deleted_aip in deleted_aip_results['hits']['hits']:
-        aips_deleted_or_pending_deletion.append(deleted_aip['fields']['uuid'][0])
+        aips_deleted_or_pending_deletion.append(deleted_aip['_source']['uuid'])
 
     # Fetch results and paginate
     def es_pager(page, page_size):
@@ -590,7 +590,7 @@ def view_aip(request, uuid):
     except IndexError:
         raise Http404
 
-    name = _get_es_field(es_aip_doc['fields'], 'name')
+    name = _get_es_field(es_aip_doc['_source'], 'name')
     active_tab = None
 
     form_upload = forms.UploadMetadataOnlyAtomForm(prefix='upload')
@@ -639,11 +639,11 @@ def view_aip(request, uuid):
     context = {
         'uuid': uuid,
         'name': name,
-        'created': _get_es_field(es_aip_doc['fields'], 'created'),
-        'status': AIP_STATUS_DESCRIPTIONS[_get_es_field(es_aip_doc['fields'], 'status', 'UPLOADED')],
-        'encrypted': _get_es_field(es_aip_doc['fields'], 'encrypted', False),
-        'size': '{0:.2f} MB'.format(_get_es_field(es_aip_doc['fields'], 'size', 0)),
-        'location_basename': os.path.basename(_get_es_field(es_aip_doc['fields'], 'filePath')),
+        'created': _get_es_field(es_aip_doc['_source'], 'created'),
+        'status': AIP_STATUS_DESCRIPTIONS[_get_es_field(es_aip_doc['_source'], 'status', 'UPLOADED')],
+        'encrypted': _get_es_field(es_aip_doc['_source'], 'encrypted', False),
+        'size': '{0:.2f} MB'.format(_get_es_field(es_aip_doc['_source'], 'size', 0)),
+        'location_basename': os.path.basename(_get_es_field(es_aip_doc['_source'], 'filePath')),
         'active_tab': active_tab,
         'forms': {
             'upload': form_upload,

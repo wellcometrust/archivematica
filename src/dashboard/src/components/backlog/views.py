@@ -64,7 +64,7 @@ def check_and_remove_deleted_transfers(es_client):
     )
 
     for hit in deletion_pending_results['hits']['hits']:
-        transfer_uuid = hit['fields']['uuid'][0]
+        transfer_uuid = hit['_source']['uuid']
 
         api_results = storage_service.get_file_info(uuid=transfer_uuid)
         try:

@@ -939,9 +939,9 @@ def get_file_tags(client, uuid):
 
     result = results['hits']['hits'][0]
     # File has no tags
-    if 'fields' not in result:
+    if '_source' not in result:
         return []
-    return result['fields']['tags']
+    return result['_source']['tags']
 
 
 def set_file_tags(client, uuid, tags):
