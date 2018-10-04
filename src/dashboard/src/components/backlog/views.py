@@ -165,7 +165,6 @@ def search(request):
             index = 'transfers'
             source = 'name,uuid,file_count,ingest_date'
 
-        hit_count = es_client.search(index=index, body=query, search_type='count')['hits']['total']
         hits = es_client.search(
             index=index,
             body=query,
@@ -174,6 +173,7 @@ def search(request):
             sort=order_by + ':' + sort_direction if order_by else '',
             _source=source,
         )
+        hit_count = hits['hits']['total']
 
     except Exception:
         err_desc = 'Error accessing transfers index'
