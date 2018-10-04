@@ -60,7 +60,7 @@ def check_and_remove_deleted_transfers(es_client):
     deletion_pending_results = es_client.search(
         body=query,
         index='transfers',
-        fields='uuid,status'
+        _source='uuid,status'
     )
 
     for hit in deletion_pending_results['hits']['hits']:

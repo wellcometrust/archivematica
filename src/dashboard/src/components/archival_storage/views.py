@@ -148,7 +148,7 @@ def search(request):
                 from_=start,
                 size=page_size,
                 index=index,
-                fields=fields,
+                _source=fields,
                 sort=sort,
             )
             if file_mode:
@@ -268,7 +268,7 @@ def create_aic(request, *args, **kwargs):
         results = es_client.search(
             body=query,
             index='aips',
-            fields='uuid,name',
+            _source='uuid,name',
             size=elasticSearchFunctions.MAX_QUERY_SIZE,  # return all records
         )
 
@@ -477,7 +477,7 @@ def list_display(request):
     deleted_aip_results = es_client.search(
         body=query,
         index='aips',
-        fields='uuid,status'
+        _source='uuid,status'
     )
     for deleted_aip in deleted_aip_results['hits']['hits']:
         aips_deleted_or_pending_deletion.append(deleted_aip['fields']['uuid'][0])
@@ -495,7 +495,7 @@ def list_display(request):
         results = es_client.search(
             index='aips',
             body=elasticSearchFunctions.MATCH_ALL_QUERY,
-            fields='origin,uuid,filePath,created,name,size,encrypted',
+            _source='origin,uuid,filePath,created,name,size,encrypted',
             sort=sort_specification,
             size=page_size,
             from_=start,

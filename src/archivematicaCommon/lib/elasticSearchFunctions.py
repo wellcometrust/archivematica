@@ -870,7 +870,7 @@ def get_aip_data(client, uuid, fields=None):
     }
 
     if fields:
-        search_params['fields'] = fields
+        search_params['_source'] = fields
 
     aips = client.search(**search_params)
 
@@ -928,7 +928,7 @@ def get_file_tags(client, uuid):
     results = client.search(
         body=query,
         index='transferfiles',
-        fields='tags',
+        _source='tags',
     )
 
     count = results['hits']['total']
