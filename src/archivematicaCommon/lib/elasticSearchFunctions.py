@@ -1125,16 +1125,6 @@ def mark_backlog_deletion_requested(client, uuid):
 # ---------------
 
 
-def normalize_results_dict(d):
-    """
-    Given an ElasticSearch response, returns a normalized copy of its fields dict.
-
-    The "fields" dict always returns all sections of the response as arrays; however, for Archivematica's records, only a single value is ever contained.
-    This normalizes the dict by replacing the arrays with their first value.
-    """
-    return {k: v[0] for k, v in d['fields'].items()}
-
-
 def augment_raw_search_results(raw_results):
     """
     This function takes JSON returned by an ES query and returns the source document for each result.

@@ -492,10 +492,7 @@ def list_display(request):
             size=page_size,
             from_=start,
         )
-        # normalize results - each of the fields contains a single value,
-        # but is returned from the ES API as a single-length array
-        # e.g. {"fields": {"uuid": ["abcd"], "name": ["aip"] ...}}
-        return [elasticSearchFunctions.normalize_results_dict(d) for d in results['hits']['hits']]
+        return [d['_source'] for d in results['hits']['hits']]
 
     items_per_page = 10
     count = es_client.count(
