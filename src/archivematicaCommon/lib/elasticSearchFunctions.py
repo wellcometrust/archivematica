@@ -112,11 +112,13 @@ class TooManyResultsError(ElasticsearchError):
 _es_hosts = None
 _es_client = None
 DEFAULT_TIMEOUT = 10
-MAX_QUERY_SIZE = 50000  # TODO: Check that this is a reasonable number
 INDICES = ['aips', 'aipfiles', 'transfers', 'transferfiles']
 # A doc type is still required in ES 6.x but it's limited to one per index.
 # It will be removed in ES 7.x, so we'll use the same for all indexes.
 DOC_TYPE = '_doc'
+# Maximun ES result window. Use the scroll API for a better way to get all
+# results or change `index.max_result_window` on each index settings.
+MAX_QUERY_SIZE = 10000
 
 
 def setup(hosts, timeout=DEFAULT_TIMEOUT):
