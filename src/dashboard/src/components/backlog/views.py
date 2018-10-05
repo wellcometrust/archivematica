@@ -157,9 +157,12 @@ def search(request):
             )
             uuids = [x['key'] for x in hits['aggregations']['transfer_uuid']['buckets']]
 
-            query['query'] = {
-                'terms': {
-                    'uuid': uuids,
+            # Recreate query to search over transfers
+            query = {
+                'query': {
+                    'terms': {
+                        'uuid': uuids,
+                    },
                 },
             }
             index = 'transfers'
