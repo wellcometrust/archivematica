@@ -132,4 +132,10 @@ class Command(DashboardCommand):
                 status='backlog',
             )
 
-            storageService.reindex_file(transfer_uuid)
+            try:
+                storageService.reindex_file(transfer_uuid)
+            except Exception:
+                self.warning(
+                    'Could not reindex Transfer in the Storage Service, '
+                    'UUID: %s' % transfer_uuid
+                )
