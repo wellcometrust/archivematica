@@ -41,7 +41,7 @@ def search_parameter_prep(request):
     other_fields = request.GET.getlist('fieldName')
 
     # Prepend default op arg as first op can't be set manually, if there are no
-    # entries, insert the first as "and" (e.g. a "must" clause). Otherwise copy
+    # entries, insert the first as "and" (a "must" clause). Otherwise copy
     # the existing first entry. This ensures that if the second clause is a
     # "must," the first entry will be too, etc.
     if len(ops) == 0:
@@ -53,9 +53,9 @@ def search_parameter_prep(request):
         queries = ['*']
         fields = ['']
     else:
-        # make sure each query has field/ops set
+        # Make sure each query has field/ops set
         for index, query in enumerate(queries):
-            # a blank query makes ES error
+            # A blank query makes ES error
             if queries[index] == '':
                 queries[index] = '*'
 
@@ -74,12 +74,12 @@ def search_parameter_prep(request):
             except:
                 types.insert(index, '')
 
-        # For "other" fields, the actual title of the subfield is located in a second array;
-        # search for any such fields and replace the placeholder value in the `fields` array
-        # with the full name.
+        # For "other" fields, the actual title of the subfield is located in a
+        # second array. Search for any such fields and replace the placeholder
+        # value in the `fields` array with the full name.
         # In Elasticsearch, "." is used to search subdocuments; for example,
-        # transferMetadata.Bagging-Date would be used to search for the value of Bagging-Date
-        # in this nested object:
+        # transferMetadata.Bagging-Date would be used to search for the value
+        # of Bagging-Date in this nested object:
         # {
         #   "transferMetadata": {
         #     "Start-Date": 0000-00-00,
@@ -92,11 +92,9 @@ def search_parameter_prep(request):
 
     return queries, ops, fields, types
 
-# these are used in templates to prevent query params
-
 
 def extract_url_search_params_from_request(request):
-    # set pagination-related variables
+    # Set pagination-related variables
     search_params = ''
     try:
         search_params = request.get_full_path().split('?')[1]
@@ -116,7 +114,10 @@ def assemble_query(es_client, queries, ops, fields, types, search_index=None, **
 
     for query in queries:
         if queries[index] != '':
-            clause = _query_clause(es_client, index, queries, ops, fields, types, search_index=search_index)
+            clause = _query_clause(
+                es_client, index, queries, ops,
+                fields, types, search_index=search_index,
+            )
             if clause:
                 if ops[index] == 'not':
                     must_not_haves.append(clause)
@@ -143,9 +144,13 @@ def _fix_object_fields(fields):
     """
     Adjusts field names for nested object fields.
 
-    Elasticsearch is able to search through nested object fields, provided that the field name is specified appropriately in the query.
-    Appending .* to the field name (for example, transferMetadata.*) causes Elasticsearch to consider any of the values within key/value pairs nested in the object being searched.
-    Without doing this, Elasticsearch will attempt to match the value of transferMetadata itself, which will always fail since it's an object and not a string.
+    Elasticsearch is able to search through nested object fields, provided that
+    the field name is specified appropriately in the query. Appending .* to the
+    field name (for example, transferMetadata.*) causes Elasticsearch to
+    consider any of the values within key/value pairs nested in the object
+    being searched. Without doing this, Elasticsearch will attempt to match the
+    value of transferMetadata itself, which will always fail since it's an
+    object and not a string.
     """
     return [field + '.*' if field in OBJECT_FIELDS else field for field in fields]
 
@@ -172,19 +177,29 @@ def _normalize_date(date):
 
 def _filter_search_fields(es_client, search_fields, index=None):
     """
-    Given search fields which search nested documents with wildcards (such as "transferMetadata.*"), returns a list of subfields filtered to contain only string-type fields.
+    Given search fields which search nested documents with wildcards (such as
+    "transferMetadata.*"), returns a list of subfields filtered to contain only
+    string-type fields.
 
-    When searching all fields of nested documents of mixed types using query_string queries, query_string queries may fail because the way the query string is interpreted depends on the type of the field being searched.
-    For example, given a nested document containing a string field and a date field, a query_string of "foo" would fail when Elasticsearch attempts to parse it as a date to match it against the date field.
-    This function uses the actual current mapping, so it supports automatically-mapped fields.
+    When searching all fields of nested documents of mixed types using
+    query_string queries, query_string queries may fail because the way the
+    query string is interpreted depends on the type of the field being searched.
+    For example, given a nested document containing a string field and a date
+    field, a query_string of "foo" would fail when Elasticsearch attempts to
+    parse it as a date to match it against the date field.
+    This function uses the actual current mapping, so it supports automatically
+    mapped fields.
 
-    Sample input and output, given a nested document containing three fields, "Bagging-Date" (date), "Bag-Name" (string), and "Bag-Type" (string):
-    ["transferMetadata.*"] #=> ["transferMetadata.Bag-Name", "transferMetadata.Bag-Type"]
+    Sample input and output, given a nested document containing three fields,
+    "Bagging-Date" (date), "Bag-Name" (string), and "Bag-Type" (string):
+    Input: ["transferMetadata.*"]
+    Output: ["transferMetadata.Bag-Name", "transferMetadata.Bag-Type"]
 
-    :param Elasticsearch es_client: Elasticsearch client
-    :param list search_fields: A list of strings representing nested object names.
-    :param str index: The name of the search index, used to look up the mapping document.
-        If not provided, the original search_fields is returned unmodified.
+    :param Elasticsearch es_client: Elasticsearch client.
+    :param list search_fields: A list of strings of nested object names.
+    :param str index: The name of the search index, used to look up the mapping
+                      document. If not provided, the original search_fields is
+                      returned unmodified.
     """
     if index is None:
         return search_fields
@@ -201,7 +216,8 @@ def _filter_search_fields(es_client, search_fields, index=None):
             mapping = elasticSearchFunctions.get_type_mapping(es_client, index)
             subfields = mapping['properties'][field_name]['properties']
         except KeyError:
-            # The requested field doesn't exist in the index, so don't worry about validating subfields
+            # The requested field doesn't exist in the index,
+            # so don't worry about validating subfields.
             new_fields.append(field)
         else:
             for subfield, field_properties in subfields.items():
@@ -215,22 +231,33 @@ def _query_clause(es_client, index, queries, ops, fields, types, search_index=No
     if fields[index] == '':
         search_fields = []
     else:
-        search_fields = _filter_search_fields(es_client, _fix_object_fields([fields[index]]), index=search_index)
+        search_fields = _filter_search_fields(
+            es_client,
+            _fix_object_fields([fields[index]]),
+            index=search_index,
+        )
 
     if types[index] == 'term':
-        # a blank term should be ignored because it prevents any results: you
-        # can never find a blank term
-        #
-        # TODO: add condition to deal with a query with no clauses because all have
-        #       been ignored
+        # A blank term should be ignored because it prevents any results.
+        # TODO: Deal with a query with no clauses because all have been ignored.
         if (queries[index] in ('', '*')):
             return
         else:
             if len(search_fields) == 0:
                 search_fields = ['_all']
-            return {'multi_match': {'query': queries[index], 'fields': search_fields}}
+            return {
+                'multi_match': {
+                    'query': queries[index],
+                    'fields': search_fields,
+                }
+            }
     elif types[index] == 'string':
-        return {'query_string': {'query': queries[index], 'fields': search_fields}}
+        return {
+            'query_string': {
+                'query': queries[index],
+                'fields': search_fields,
+            }
+        }
     elif types[index] == 'range':
         start, end = _parse_date_range(queries[index])
         try:
