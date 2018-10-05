@@ -40,12 +40,12 @@ def search_parameter_prep(request):
     types = request.GET.getlist('type')
     other_fields = request.GET.getlist('fieldName')
 
-    # prepend default op arg as first op can't be set manually
-    # if there are no entries, insert the first as "or" (e.g. a "should" clause);
-    # otherwise copy the existing first entry
-    # this ensures that if the second clause is a "must," the first entry will be too, etc.
+    # Prepend default op arg as first op can't be set manually, if there are no
+    # entries, insert the first as "and" (e.g. a "must" clause). Otherwise copy
+    # the existing first entry. This ensures that if the second clause is a
+    # "must," the first entry will be too, etc.
     if len(ops) == 0:
-        ops.insert(0, 'or')
+        ops.insert(0, 'and')
     else:
         ops.insert(0, ops[0])
 
