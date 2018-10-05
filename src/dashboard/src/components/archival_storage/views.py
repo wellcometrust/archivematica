@@ -97,11 +97,14 @@ def search(request):
     results = None
     query = advanced_search.assemble_query(es_client, queries, ops, fields, types, search_index='aipfiles')
     try:
-        # use all results to pull transfer facets if not in file mode
+        # Use all results to pull transfer facets if not in file mode
         # pulling only one field (we don't need field data as we augment
-        # the results using separate queries)
+        # the results using separate queries).
         if not file_mode:
             # Fetch all unique AIP UUIDs in the returned set of files
+            # ES query will limit to 10 aggregation results by default,
+            # add size parameter in terms to override.
+            # TODO: Use composite aggregation when it gets out of beta.
             query['aggs'] = {'aip_uuids': {'terms': {'field': 'AIPUUID', 'size': '10000'}}}
             # Don't return results, just the aggregation
             query['size'] = 0

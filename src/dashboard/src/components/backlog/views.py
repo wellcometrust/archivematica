@@ -144,11 +144,13 @@ def search(request):
         if file_mode:
             index = 'transferfiles'
             source = 'filename,sipuuid,relative_path'
-        else:  # Transfer mode
-            # Query to transfers/transferfile, but only fetch & aggregrate transfer UUIDs
-            # Based on transfer UUIDs, query to transfers/transfer
-            # ES query will limit to 10 aggregation results by default, add size parameter in terms to override
-            # (https://stackoverflow.com/questions/22927098/show-all-elasticsearch-aggregation-results-buckets-and-not-just-10)
+        else:
+            # Transfer mode:
+            # Query to transferfile, but only fetch & aggregrate transfer UUIDs.
+            # Based on transfer UUIDs, query to transfers.
+            # ES query will limit to 10 aggregation results by default,
+            # add size parameter in terms to override.
+            # TODO: Use composite aggregation when it gets out of beta.
             query['aggs'] = {'transfer_uuid': {'terms': {'field': 'sipuuid', 'size': '10000'}}}
             hits = es_client.search(
                 index='transferfiles',
