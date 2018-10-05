@@ -43,7 +43,9 @@ def search_parameter_prep(request):
     # Prepend default op arg as first op can't be set manually, if there are no
     # entries, insert the first as "and" (a "must" clause). Otherwise copy
     # the existing first entry. This ensures that if the second clause is a
-    # "must," the first entry will be too, etc.
+    # "must," the first entry will be too, etc. Should clauses will only
+    # influence the weight of the results if a must/must not/filter is present
+    # therefore we'll default to `and` to create must clauses.
     if len(ops) == 0:
         ops.insert(0, 'and')
     else:
@@ -67,7 +69,10 @@ def search_parameter_prep(request):
             try:
                 ops[index]
             except:
-                ops.insert(index, 'or')
+                ops.insert(index, 'and')
+
+            if ops[index] == '':
+                ops[index] = 'and'
 
             try:
                 types[index]
