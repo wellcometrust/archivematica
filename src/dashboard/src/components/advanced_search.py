@@ -248,21 +248,23 @@ def _query_clause(es_client, index, queries, ops, fields, types, search_index=No
         if (queries[index] in ('', '*')):
             return
         else:
-            if len(search_fields) == 0:
-                search_fields = ['_all']
-            return {
+            query = {
                 'multi_match': {
                     'query': queries[index],
-                    'fields': search_fields,
                 }
             }
+            if len(search_fields) > 0:
+                query['multi_match']['fields'] = search_fields
+            return query
     elif types[index] == 'string':
-        return {
+        query = {
             'query_string': {
                 'query': queries[index],
-                'fields': search_fields,
             }
         }
+        if len(search_fields) > 0:
+            query['query_string']['fields'] = search_fields
+        return query
     elif types[index] == 'range':
         start, end = _parse_date_range(queries[index])
         try:
