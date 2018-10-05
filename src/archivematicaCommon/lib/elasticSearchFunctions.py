@@ -84,17 +84,6 @@ BACKLOG_FILTER = {
     }
 }
 
-MACHINE_READABLE_FIELD_SPEC = {
-    'type': 'keyword',
-}
-
-SORTABLE_STRING_FIELD_SPEC = {
-    'type': 'text',
-    'fields': {
-        'raw': {'type': 'keyword'},
-    }
-}
-
 
 class ElasticsearchError(Exception):
     """ Not operational errors. """
@@ -216,9 +205,14 @@ def _get_aips_index_body():
             DOC_TYPE: {
                 'date_detection': False,
                 'properties': {
-                    'name': SORTABLE_STRING_FIELD_SPEC,
+                    'name': {
+                        'type': 'text',
+                        'fields': {
+                            'raw': {'type': 'keyword'},
+                        }
+                    },
                     'size': {'type': 'double'},
-                    'uuid': MACHINE_READABLE_FIELD_SPEC,
+                    'uuid': {'type': 'keyword'},
                     'mets': _load_mets_mapping('aips'),
                 }
             }
@@ -232,16 +226,21 @@ def _get_aipfiles_index_body():
             DOC_TYPE: {
                 'date_detection': False,
                 'properties': {
-                    'AIPUUID': MACHINE_READABLE_FIELD_SPEC,
-                    'FILEUUID': MACHINE_READABLE_FIELD_SPEC,
-                    'isPartOf': MACHINE_READABLE_FIELD_SPEC,
-                    'AICID': MACHINE_READABLE_FIELD_SPEC,
-                    'sipName': SORTABLE_STRING_FIELD_SPEC,
+                    'sipName': {
+                        'type': 'text',
+                        'fields': {
+                            'raw': {'type': 'keyword'},
+                        }
+                    },
+                    'AIPUUID': {'type': 'keyword'},
+                    'FILEUUID': {'type': 'keyword'},
+                    'isPartOf': {'type': 'keyword'},
+                    'AICID': {'type': 'keyword'},
                     'indexedAt': {'type': 'double'},
                     'filePath': {'type': 'text'},
                     'fileExtension': {'type': 'text'},
                     'origin': {'type': 'text'},
-                    'identifiers': MACHINE_READABLE_FIELD_SPEC,
+                    'identifiers': {'type': 'keyword'},
                     'METS': _load_mets_mapping('aipfiles'),
                 }
             }
@@ -254,14 +253,19 @@ def _get_transfers_index_body():
         'mappings': {
             DOC_TYPE: {
                 'properties': {
-                    'name': SORTABLE_STRING_FIELD_SPEC,
+                    'name': {
+                        'type': 'text',
+                        'fields': {
+                            'raw': {'type': 'keyword'},
+                        }
+                    },
                     'status': {'type': 'text'},
                     'ingest_date': {
                         'type': 'date',
                         'format': 'dateOptionalTime',
                     },
                     'file_count': {'type': 'integer'},
-                    'uuid': MACHINE_READABLE_FIELD_SPEC,
+                    'uuid': {'type': 'keyword'},
                     'pending_deletion': {'type': 'boolean'}
                 }
             }
@@ -274,13 +278,18 @@ def _get_transferfiles_index_body():
         'mappings': {
             DOC_TYPE: {
                 'properties': {
-                    'filename': SORTABLE_STRING_FIELD_SPEC,
+                    'filename': {
+                        'type': 'text',
+                        'fields': {
+                            'raw': {'type': 'keyword'},
+                        }
+                    },
                     'relative_path': {'type': 'text'},
-                    'fileuuid': MACHINE_READABLE_FIELD_SPEC,
-                    'sipuuid': MACHINE_READABLE_FIELD_SPEC,
-                    'accessionid': MACHINE_READABLE_FIELD_SPEC,
-                    'status': MACHINE_READABLE_FIELD_SPEC,
-                    'origin': MACHINE_READABLE_FIELD_SPEC,
+                    'fileuuid': {'type': 'keyword'},
+                    'sipuuid': {'type': 'keyword'},
+                    'accessionid': {'type': 'keyword'},
+                    'status': {'type': 'keyword'},
+                    'origin': {'type': 'keyword'},
                     'ingestdate': {
                         'type': 'date',
                         'format': 'dateOptionalTime',
@@ -298,13 +307,13 @@ def _get_transferfiles_index_body():
                     },
                     'created': {'type': 'double'},
                     'size': {'type': 'double'},
-                    'tags': MACHINE_READABLE_FIELD_SPEC,
-                    'file_extension': MACHINE_READABLE_FIELD_SPEC,
-                    'bulk_extractor_reports': MACHINE_READABLE_FIELD_SPEC,
+                    'tags': {'type': 'keyword'},
+                    'file_extension': {'type': 'keyword'},
+                    'bulk_extractor_reports': {'type': 'keyword'},
                     'format': {
                         'type': 'nested',
                         'properties': {
-                            'puid': MACHINE_READABLE_FIELD_SPEC,
+                            'puid': {'type': 'keyword'},
                             'format': {'type': 'text'},
                             'group': {'type': 'text'},
                         }
