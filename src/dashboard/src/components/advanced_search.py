@@ -43,9 +43,7 @@ def search_parameter_prep(request):
     # Prepend default op arg as first op can't be set manually, if there are no
     # entries, insert the first as "and" (a "must" clause). Otherwise copy
     # the existing first entry. This ensures that if the second clause is a
-    # "must," the first entry will be too, etc. Should clauses will only
-    # influence the weight of the results if a must/must not/filter is present
-    # therefore we'll default to `and` to create must clauses.
+    # "should" the first entry will be too, etc.
     if len(ops) == 0:
         ops.insert(0, 'and')
     else:
@@ -133,6 +131,19 @@ def assemble_query(es_client, queries, ops, fields, types, search_index=None, **
 
         index = index + 1
 
+    # Return match all query if no clauses
+    if len(must_haves + must_not_haves + should_haves + filters) == 0:
+        return elasticSearchFunctions.MATCH_ALL_QUERY
+
+    # TODO: Fix boolean query build:
+    # Should clauses will only influence the weight of the results if
+    # a must/must not/filter is present, but they will have no impact
+    # on the returned results. When a should clause is parsed, it should
+    # be added inside an extra boolean query with two should clauses,
+    # one with the existing must and other with the new should, that
+    # new boolean query has to be added as a the must in the final
+    # boolean query. This should be done in orther instead of in the
+    # end to reflect the input order in the boolean query.
     return {
         "query": {
             "bool": {
@@ -233,6 +244,11 @@ def _filter_search_fields(es_client, search_fields, index=None):
 
 
 def _query_clause(es_client, index, queries, ops, fields, types, search_index=None):
+    # Ignore empty queries
+    if (queries[index] in ('', '*')):
+        return
+
+    # Normalize fields
     if fields[index] == '':
         search_fields = []
     else:
@@ -242,20 +258,16 @@ def _query_clause(es_client, index, queries, ops, fields, types, search_index=No
             index=search_index,
         )
 
+    # Build query based on type
+    query = None
     if types[index] == 'term':
-        # A blank term should be ignored because it prevents any results.
-        # TODO: Deal with a query with no clauses because all have been ignored.
-        if (queries[index] in ('', '*')):
-            return
-        else:
-            query = {
-                'multi_match': {
-                    'query': queries[index],
-                }
+        query = {
+            'multi_match': {
+                'query': queries[index],
             }
-            if len(search_fields) > 0:
-                query['multi_match']['fields'] = search_fields
-            return query
+        }
+        if len(search_fields) > 0:
+            query['multi_match']['fields'] = search_fields
     elif types[index] == 'string':
         query = {
             'query_string': {
@@ -264,7 +276,6 @@ def _query_clause(es_client, index, queries, ops, fields, types, search_index=No
         }
         if len(search_fields) > 0:
             query['query_string']['fields'] = search_fields
-        return query
     elif types[index] == 'range':
         start, end = _parse_date_range(queries[index])
         try:
@@ -273,7 +284,9 @@ def _query_clause(es_client, index, queries, ops, fields, types, search_index=No
         except ValueError as e:
             logger.info(str(e))
             return
-        return {'range': {fields[index]: {'gte': start, 'lte': end}}}
+        query = {'range': {fields[index]: {'gte': start, 'lte': end}}}
+
+    return query
 
 
 def indexed_count(es_client, index, query=None):
