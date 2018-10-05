@@ -95,7 +95,7 @@ def search(request):
     # perform search
     es_client = elasticSearchFunctions.get_client()
     results = None
-    query = advanced_search.assemble_query(es_client, queries, ops, fields, types, search_index='aipfiles')
+    query = advanced_search.assemble_query(queries, ops, fields, types)
     try:
         # Use all results to pull transfer facets if not in file mode
         # pulling only one field (we don't need field data as we augment

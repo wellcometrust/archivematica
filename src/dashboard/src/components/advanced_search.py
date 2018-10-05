@@ -108,19 +108,15 @@ def extract_url_search_params_from_request(request):
     return search_params
 
 
-def assemble_query(es_client, queries, ops, fields, types, search_index=None, **kwargs):
-    must_haves = kwargs.get('must_haves', [])
-    filters = kwargs.get('filters', [])
+def assemble_query(queries, ops, fields, types, filters=[]):
+    must_haves = []
     should_haves = []
     must_not_haves = []
     index = 0
 
     for query in queries:
         if queries[index] != '':
-            clause = _query_clause(
-                es_client, index, queries, ops,
-                fields, types, search_index=search_index,
-            )
+            clause = _query_clause(index, queries, ops, fields, types)
             if clause:
                 if ops[index] == 'not':
                     must_not_haves.append(clause)
@@ -191,59 +187,7 @@ def _normalize_date(date):
         raise ValueError("Invalid date received ({}); ignoring date query".format(date))
 
 
-def _filter_search_fields(es_client, search_fields, index=None):
-    """
-    Given search fields which search nested documents with wildcards (such as
-    "transferMetadata.*"), returns a list of subfields filtered to contain only
-    string-type fields.
-
-    When searching all fields of nested documents of mixed types using
-    query_string queries, query_string queries may fail because the way the
-    query string is interpreted depends on the type of the field being searched.
-    For example, given a nested document containing a string field and a date
-    field, a query_string of "foo" would fail when Elasticsearch attempts to
-    parse it as a date to match it against the date field.
-    This function uses the actual current mapping, so it supports automatically
-    mapped fields.
-
-    Sample input and output, given a nested document containing three fields,
-    "Bagging-Date" (date), "Bag-Name" (string), and "Bag-Type" (string):
-    Input: ["transferMetadata.*"]
-    Output: ["transferMetadata.Bag-Name", "transferMetadata.Bag-Type"]
-
-    :param Elasticsearch es_client: Elasticsearch client.
-    :param list search_fields: A list of strings of nested object names.
-    :param str index: The name of the search index, used to look up the mapping
-                      document. If not provided, the original search_fields is
-                      returned unmodified.
-    """
-    if index is None:
-        return search_fields
-
-    new_fields = []
-    for field in search_fields:
-        # Not a wildcard nested document search, so just add to the list as-is
-        if not field.endswith('.*'):
-            new_fields.append(field)
-            continue
-        try:
-            field_name = field.rsplit('.', 1)[0]
-            # FIXME
-            mapping = elasticSearchFunctions.get_type_mapping(es_client, index)
-            subfields = mapping['properties'][field_name]['properties']
-        except KeyError:
-            # The requested field doesn't exist in the index,
-            # so don't worry about validating subfields.
-            new_fields.append(field)
-        else:
-            for subfield, field_properties in subfields.items():
-                if field_properties['type'] == 'string':
-                    new_fields.append(field_name + '.' + subfield)
-
-    return new_fields
-
-
-def _query_clause(es_client, index, queries, ops, fields, types, search_index=None):
+def _query_clause(index, queries, ops, fields, types):
     # Ignore empty queries
     if (queries[index] in ('', '*')):
         return
@@ -252,11 +196,7 @@ def _query_clause(es_client, index, queries, ops, fields, types, search_index=No
     if fields[index] == '':
         search_fields = []
     else:
-        search_fields = _filter_search_fields(
-            es_client,
-            _fix_object_fields([fields[index]]),
-            index=search_index,
-        )
+        search_fields = _fix_object_fields([fields[index]])
 
     # Build query based on type
     query = None

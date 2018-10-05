@@ -600,12 +600,8 @@ def transfer_backlog(request, ui):
 
         try:
             query = advanced_search.assemble_query(
-                es_client,
-                queries,
-                ops,
-                fields,
-                types,
-                filters=backlog_filter,
+                queries, ops, fields, types,
+                filters=[backlog_filter],
             )
         except:
             logger.exception('Error accessing index.')
