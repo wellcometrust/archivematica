@@ -225,6 +225,7 @@ def create_indexes_if_needed(client, indexes):
 
 def _get_aips_index_body():
     return {
+        'settings': _get_index_settings(),
         'mappings': {
             DOC_TYPE: {
                 'date_detection': False,
@@ -233,7 +234,8 @@ def _get_aips_index_body():
                         'type': 'text',
                         'fields': {
                             'raw': {'type': 'keyword'},
-                        }
+                        },
+                        'analyzer': 'file_path_and_name',
                     },
                     'size': {'type': 'double'},
                     'uuid': {'type': 'keyword'},
@@ -246,6 +248,7 @@ def _get_aips_index_body():
 
 def _get_aipfiles_index_body():
     return {
+        'settings': _get_index_settings(),
         'mappings': {
             DOC_TYPE: {
                 'date_detection': False,
@@ -254,14 +257,18 @@ def _get_aipfiles_index_body():
                         'type': 'text',
                         'fields': {
                             'raw': {'type': 'keyword'},
-                        }
+                        },
+                        'analyzer': 'file_path_and_name',
                     },
                     'AIPUUID': {'type': 'keyword'},
                     'FILEUUID': {'type': 'keyword'},
                     'isPartOf': {'type': 'keyword'},
                     'AICID': {'type': 'keyword'},
                     'indexedAt': {'type': 'double'},
-                    'filePath': {'type': 'text'},
+                    'filePath': {
+                        'type': 'text',
+                        'analyzer': 'file_path_and_name',
+                    },
                     'fileExtension': {'type': 'text'},
                     'origin': {'type': 'text'},
                     'identifiers': {'type': 'keyword'},
@@ -274,6 +281,7 @@ def _get_aipfiles_index_body():
 
 def _get_transfers_index_body():
     return {
+        'settings': _get_index_settings(),
         'mappings': {
             DOC_TYPE: {
                 'properties': {
@@ -281,7 +289,8 @@ def _get_transfers_index_body():
                         'type': 'text',
                         'fields': {
                             'raw': {'type': 'keyword'},
-                        }
+                        },
+                        'analyzer': 'file_path_and_name',
                     },
                     'status': {'type': 'text'},
                     'ingest_date': {
@@ -299,6 +308,7 @@ def _get_transfers_index_body():
 
 def _get_transferfiles_index_body():
     return {
+        'settings': _get_index_settings(),
         'mappings': {
             DOC_TYPE: {
                 'properties': {
@@ -306,9 +316,13 @@ def _get_transferfiles_index_body():
                         'type': 'text',
                         'fields': {
                             'raw': {'type': 'keyword'},
-                        }
+                        },
+                        'analyzer': 'file_path_and_name',
                     },
-                    'relative_path': {'type': 'text'},
+                    'relative_path': {
+                        'type': 'text',
+                        'analyzer': 'file_path_and_name',
+                    },
                     'fileuuid': {'type': 'keyword'},
                     'sipuuid': {'type': 'keyword'},
                     'accessionid': {'type': 'keyword'},
@@ -361,6 +375,31 @@ def _load_mets_mapping(index):
     path = os.path.join(__file__, '..', 'elasticsearch', json_file)
     with open(os.path.normpath(path)) as f:
         return json.load(f)
+
+
+def _get_index_settings():
+    """
+    Returns a dictionary with the settings used in all indexes.
+    """
+    return {
+        'analysis': {
+            'analyzer': {
+                # Use the char_group tokenizer to split paths and filenames,
+                # including file extensions, which avoids the overhead of the
+                # pattern tokenizer.
+                'file_path_and_name': {
+                    'tokenizer': 'char_tokenizer',
+                    'filter': ['lowercase'],
+                }
+            },
+            'tokenizer': {
+                'char_tokenizer': {
+                    'type': 'char_group',
+                    'tokenize_on_chars': ['-', '_', '.', '/', '\\'],
+                }
+            }
+        }
+    }
 
 
 # ---------------
