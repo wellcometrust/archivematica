@@ -238,8 +238,9 @@ class Command(DashboardCommand):
         if options['delete_all']:
             print('Deleting all AIPs in the AIP index')
             time.sleep(3)  # Time for the user to panic and kill the process
-            es_client.indices.delete('aips,aipfiles', ignore=404)
-            elasticSearchFunctions.create_indexes_if_needed(es_client)
+            indexes = ['aips', 'aipfiles']
+            es_client.indices.delete(','.join(indexes), ignore=404)
+            elasticSearchFunctions.create_indexes_if_needed(es_client, indexes)
 
         if not options['uuid']:
             print("Rebuilding AIPS index from AIPS in", options['rootdir'])

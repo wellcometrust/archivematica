@@ -101,7 +101,7 @@ class TooManyResultsError(ElasticsearchError):
 _es_hosts = None
 _es_client = None
 DEFAULT_TIMEOUT = 10
-INDICES = ['aips', 'aipfiles', 'transfers', 'transferfiles']
+INDEXES = ['aips', 'aipfiles', 'transfers', 'transferfiles']
 # A doc type is still required in ES 6.x but it's limited to one per index.
 # It will be removed in ES 7.x, so we'll use the same for all indexes.
 DOC_TYPE = '_doc'
@@ -110,11 +110,13 @@ DOC_TYPE = '_doc'
 MAX_QUERY_SIZE = 10000
 
 
-def setup(hosts, timeout=DEFAULT_TIMEOUT):
+def setup(hosts, timeout=DEFAULT_TIMEOUT, enabled=['aips', 'transfers']):
     """
     Initialize Elasticsearch client and share it as the attribute _es_client in
     the current module. An additional attribute _es_hosts is defined containing
-    the Elasticsearch hosts (expected types are: string, list or tuple).
+    the Elasticsearch hosts (expected types are: string, list or tuple). Also,
+    the existence of the enabled indexes is checked to be able to create the
+    required indexes on the fly if they don't exist.
     """
     global _es_hosts
     global _es_client
@@ -126,9 +128,29 @@ def setup(hosts, timeout=DEFAULT_TIMEOUT):
         'dead_timeout': 2
     })
 
+    # TODO: Do we really need to be able to create the indexes
+    # on the fly? Could we force to run the rebuild commands and
+    # avoid doing this on each setup?
+    indexes = []
+    if 'aips' in enabled:
+        indexes.extend(['aips', 'aipfiles'])
+    if 'transfers' in enabled:
+        indexes.extend(['transfers', 'transferfiles'])
+    if len(indexes) > 0:
+        create_indexes_if_needed(_es_client, indexes)
+    else:
+        logger.warning(
+            'Setting up the Elasticsearch client '
+            'without enabled indexes.'
+        )
+
 
 def setup_reading_from_conf(settings):
-    setup(settings.ELASTICSEARCH_SERVER, settings.ELASTICSEARCH_TIMEOUT)
+    setup(
+        settings.ELASTICSEARCH_SERVER,
+        settings.ELASTICSEARCH_TIMEOUT,
+        settings.SEARCH_ENABLED,
+    )
 
 
 def get_host():
@@ -153,7 +175,6 @@ def get_client():
     """
     if not _es_client:
         raise ImproperlyConfigured('The Elasticsearch client has not been set up yet. Please call setup() first.')
-    create_indexes_if_needed(_es_client)  # TODO: find a better place!
     return _es_client
 
 
@@ -183,15 +204,18 @@ def _wait_for_cluster_yellow_status(client, wait_between_tries=10, max_tries=10)
 # --------------
 
 
-def create_indexes_if_needed(client):
+def create_indexes_if_needed(client, indexes):
     """
-    Checks if all indeces exist in the client. Otherwise, creates the missing
-    ones with their settings and mappings.
+    Checks if the indexes passed exist in the client. Otherwise, creates
+    the missing ones with their settings and mappings.
     """
-    if client.indices.exists(index=','.join(INDICES)):
-        logger.info('All indices already created.')
+    if client.indices.exists(index=','.join(indexes)):
+        logger.info('All indexes already created.')
         return
-    for index in INDICES:
+    for index in indexes:
+        if index not in INDEXES:
+            logger.warning('Index "%s" not recognized. Skipping.' % index)
+            continue
         # Call get index body functions bellow for each index
         body = getattr(sys.modules[__name__], '_get_%s_index_body' % index)()
         logger.info('Creating "%s" index ...' % index)

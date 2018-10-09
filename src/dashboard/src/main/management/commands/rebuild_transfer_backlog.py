@@ -81,9 +81,10 @@ class Command(DashboardCommand):
             self.success('Connected to Elasticsearch node {} (v{}).'.format(
                 es_info['name'], es_info['version']['number']))
 
-        self.delete_index(es_client)
-        self.create_index(es_client)
-        self.populate_index(es_client, transfer_backlog_dir)
+        indexes = ['transfers', 'transferfiles']
+        self.delete_indexes(es_client, indexes)
+        self.create_indexes(es_client, indexes)
+        self.populate_indexes(es_client, transfer_backlog_dir)
         self.success('Indexing complete!')
 
     def confirm(self, no_prompt):
@@ -102,22 +103,22 @@ class Command(DashboardCommand):
         if tail != suffix:
             return os.path.join(path, suffix)
 
-    def delete_index(self, es_client):
-        """Delete search index."""
+    def delete_indexes(self, es_client, indexes):
+        """Delete search indeesx."""
         self.stdout.write(
             'Deleting all transfers and transfer files '
             'in the "transfers" and "transferfiles" indexes ...'
         )
         time.sleep(3)  # Time for the user to panic and kill the process.
-        es_client.indices.delete('transfers,transferfiles', ignore=404)
+        es_client.indices.delete(','.join(indexes), ignore=404)
 
-    def create_index(self, es_client):
-        """Create search index."""
+    def create_indexes(self, es_client, indexes):
+        """Create search indexes."""
         self.stdout.write('Creating indexes ...')
-        elasticSearchFunctions.create_indexes_if_needed(es_client)
+        elasticSearchFunctions.create_indexes_if_needed(es_client, indexes)
 
-    def populate_index(self, es_client, transfer_backlog_dir):
-        """Populate search index."""
+    def populate_indexes(self, es_client, transfer_backlog_dir):
+        """Populate search indexes."""
         for directory in os.listdir(transfer_backlog_dir):
             if directory == '.gitignore':
                 continue
