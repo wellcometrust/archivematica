@@ -208,6 +208,16 @@ class Command(DashboardCommand):
             metavar='PATH')
 
     def handle(self, *args, **options):
+        # Check that the `aips` part of the search is enabled
+        if 'aips' not in django_settings.SEARCH_ENABLED:
+            print(
+                "The AIPs indexes are not enabled. Please, make sure to "
+                "set the *_SEARCH_ENABLED environment variables to `true` "
+                "to enable the AIPs and Transfers indexes, or to `aips` "
+                "to only enable the AIPs indexes."
+            )
+            sys.exit(1)
+
         # Check root directory exists
         if not os.path.isdir(options['rootdir']):
             print("AIP store location doesn't exist.")

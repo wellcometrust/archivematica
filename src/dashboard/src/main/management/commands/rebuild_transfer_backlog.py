@@ -50,6 +50,16 @@ class Command(DashboardCommand):
 
     def handle(self, *args, **options):
         """Entry point of the rebuild_transfer_backlog command."""
+        # Check that the `transfers` part of the search is enabled
+        if 'transfers' not in django_settings.SEARCH_ENABLED:
+            print(
+                "The Transfers indexes are not enabled. Please, make sure to "
+                "set the *_SEARCH_ENABLED environment variables to `true` "
+                "to enable the Transfers and AIPs indexes, or to `transfers` "
+                "to only enable the Transfers indexes."
+            )
+            sys.exit(1)
+
         if not self.confirm(options['no_prompt']):
             sys.exit(0)
 
