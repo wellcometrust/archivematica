@@ -5,7 +5,7 @@ import dj_database_url
 from .base import *
 
 
-DATABASES['default'] = dj_database_url.config(env='SS_DB_URL', conn_max_age=600)
+DATABASES['default'] = dj_database_url.config(env='ARCHIVEMATICA_DASHBOARD_DB_URL', conn_max_age=600)
 
 STATIC_ROOT = os.environ.get(
     'DJANGO_STATIC_ROOT', os.path.join(BASE_PATH, 'static')

@@ -22,6 +22,7 @@ import logging.config
 import os
 
 from appconfig import Config, process_search_enabled
+import dj_database_url
 import email_settings
 
 CONFIG_MAPPING = {
@@ -127,22 +128,29 @@ config.read_files([
 ])
 
 
-DATABASES = {
-    'default': {
-        'ENGINE': config.get('db_engine'),
-        'NAME': config.get('db_name'),
-        'USER': config.get('db_user'),
-        'PASSWORD': config.get('db_password'),
-        'HOST': config.get('db_host'),
-        'PORT': config.get('db_port'),
-
-        # Recycling connections in MCPClient is not an option because this is
-        # a threaded application. We need a connection pool but we don't have
-        # one we can rely on at the moment - django_mysqlpool does not support
-        # Py3 and seems abandoned.
-        'CONN_MAX_AGE': 0,
+if 'ARCHIVEMATICA_MCPCLIENT_DB_URL' in os.environ:
+    DATABASES = {
+        'default': dj_database_url.config(
+            env='ARCHIVEMATICA_MCPCLIENT_DB_URL', conn_max_age=600
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': config.get('db_engine'),
+            'NAME': config.get('db_name'),
+            'USER': config.get('db_user'),
+            'PASSWORD': config.get('db_password'),
+            'HOST': config.get('db_host'),
+            'PORT': config.get('db_port'),
+
+            # Recycling connections in MCPClient is not an option because this is
+            # a threaded application. We need a connection pool but we don't have
+            # one we can rely on at the moment - django_mysqlpool does not support
+            # Py3 and seems abandoned.
+            'CONN_MAX_AGE': 0,
+        }
+    }
 
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = config.get(

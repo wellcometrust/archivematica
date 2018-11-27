@@ -22,6 +22,7 @@ import logging.config
 import os
 
 from appconfig import Config, process_search_enabled
+import dj_database_url
 import email_settings
 
 CONFIG_MAPPING = {
@@ -108,22 +109,29 @@ config.read_files([
 ])
 
 
-DATABASES = {
-    'default': {
-        'ENGINE': config.get('db_engine'),
-        'NAME': config.get('db_name'),
-        'USER': config.get('db_user'),
-        'PASSWORD': config.get('db_password'),
-        'HOST': config.get('db_host'),
-        'PORT': config.get('db_port'),
-
-        # CONN_MAX_AGE is irrelevant in MCPServer because Django's database
-        # connection reciclyng mechanism is only used in the web context, i.e.
-        # see `signals.request_started` and `signals.request_finished` in
-        # Django's source code.
-        'CONN_MAX_AGE': 0,
+if 'ARCHIVEMATICA_MCPSERVER_DB_URL' in os.environ:
+    DATABASES = {
+        'default': dj_database_url.config(
+            env='ARCHIVEMATICA_MCPSERVER_DB_URL', conn_max_age=600
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': config.get('db_engine'),
+            'NAME': config.get('db_name'),
+            'USER': config.get('db_user'),
+            'PASSWORD': config.get('db_password'),
+            'HOST': config.get('db_host'),
+            'PORT': config.get('db_port'),
+
+            # CONN_MAX_AGE is irrelevant in MCPServer because Django's database
+            # connection reciclyng mechanism is only used in the web context, i.e.
+            # see `signals.request_started` and `signals.request_finished` in
+            # Django's source code.
+            'CONN_MAX_AGE': 0,
+        }
+    }
 
 # These are all the apps that we need so we can use the models in the
 # Dashboard.
