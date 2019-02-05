@@ -69,6 +69,17 @@ def compress_aip(job, compression, compression_level, sip_directory, sip_name, s
             'echo program="7z"\; '
             'algorithm="{}"\; '
             'version="`7z | grep Version`"'.format(compression_algorithm))
+    elif program == 'zip':
+        compressed_location = uncompressed_location + ".zip"
+        command = '/usr/bin/7z a -bd -tzip -y -mm={algorithm} -mx={level} -mtc=on -mmt=on "{compressed_location}" "{uncompressed_location}"'.format(
+            algorithm=compression_algorithm, level=compression_level,
+            uncompressed_location=uncompressed_location,
+            compressed_location=compressed_location
+        )
+        tool_info_command = (
+            'echo program="7z"\; '
+            'algorithm="{}"\; '
+            'version="`7z | grep Version`"'.format(compression_algorithm))
     elif program == 'pbzip2':
         compressed_location = uncompressed_location + ".tar.bz2"
         command = '/bin/tar -c --directory "{sip_directory}" "{archive_path}" | /usr/bin/pbzip2 --compress -{level} > "{compressed_location}"'.format(
