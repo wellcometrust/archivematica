@@ -1,5 +1,11 @@
 FROM artefactual/archivematica-mcp-client-base:20190227.01.9a3872e0
 
+# This is already included in the installs set up in MCPClient-base already but we
+# don't source a local copy of that - the above `FROM` command uses the Artefactual
+# version. So keep the unzip install here until there's a "FROM"-able image that
+# includes it!
+RUN apt-get update && apt-get install -y --no-install-recommends unzip
+
 ENV DJANGO_SETTINGS_MODULE settings.common
 ENV PYTHONPATH /src/MCPClient/lib/:/src/archivematicaCommon/lib/:/src/dashboard/src/
 ENV ARCHIVEMATICA_MCPCLIENT_MCPCLIENT_ARCHIVEMATICACLIENTMODULES /src/MCPClient/lib/archivematicaClientModules
