@@ -24,6 +24,7 @@ import argparse
 import multiprocessing
 import os
 import shutil
+import tempfile
 
 import django
 
@@ -88,6 +89,8 @@ def bag_with_empty_directories(job, destination, sip_directory, sip_uuid, algori
         checksums=[algorithm],
     )
     create_directories(os.path.join(destination, "data"), dir_list)
+
+    shutil.rmtree(tmp_dir)
 
 
 def call(jobs):
