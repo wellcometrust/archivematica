@@ -102,7 +102,9 @@ def bag_with_empty_directories(job, operation, destination, sip_directory, paylo
     # Goal: bagit <operation> <destination> <flattened payload list> <optional args>
     bagit_args = [operation, destination]
     bagit_args.extend(payload_entries)
-    bagit_args.extend(['--writer', writer, '--payloadmanifestalgorithm', algorithm])
+    bagit_args.extend(['--writer', writer,
+                       '--payloadmanifestalgorithm', algorithm,
+                       '--tagmanifestalgorithm', algorithm])
 
     tmp_dir = tempfile.mkdtemp()
     baginfo_filename = os.path.join(tmp_dir, 'bag-info.txt')
