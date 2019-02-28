@@ -9,11 +9,11 @@ resource "aws_iam_access_key" "travis_ci" {
 data "aws_iam_policy_document" "travis_permissions" {
   statement {
     actions = [
-      "s3:Put*",
+      "ecr:*",
     ]
 
     resources = [
-      "arn:aws:s3:::wellcomecollection-workflow-infra/archivematica/debs/*",
+      "*",
     ]
   }
 }
