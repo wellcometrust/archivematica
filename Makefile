@@ -4,6 +4,8 @@ PUBLISH_SERVICE_IMAGE = wellcome/publish_service:60
 ROOT = $(shell git rev-parse --show-toplevel)
 DOCKER_RUN = $(ROOT)/wellcome/docker_run.py
 
+ACCOUNT_ID = 299497370133
+
 
 # Build and tag a Docker image.
 #
