@@ -1,69 +1,33 @@
----
+language: "sh"
 
-sudo: false
+sudo: "required"
 dist: xenial
 
-language: python
-cache: pip
+services:
+  - "docker"
 
 branches:
   only:
-    - qa/1.x
-    - /^stable\/\d+\.\d+\.x$/
+    - "wellcome-storage-service"
 
-before_script:
-  - pip install tox
+env:
+  matrix:
+    - "IMAGE=dashboard"
+    - "IMAGE=mcp_client"
+    - "IMAGE=mcp_server"
 
-script: tox
+before_install:
+  - openssl aes-256-cbc -K $encrypted_83630750896a_key -iv $encrypted_83630750896a_iv -in secrets.zip.enc -out secrets.zip -d
+  - unzip -d ~/.aws secrets.zip
 
-install: true
+script:
+  >
+    if [[ "$TRAVIS_EVENT_TYPE" == "push" ]]; then
+      make "$IMAGE-publish"
+    else
+      make "$IMAGE-build"
+    fi
 
 notifications:
-  email: false
-
-matrix:
-  fast_finish: true
-  include:
-
-    # Dashboard
-
-    - python: "2.7"
-      env: TOXENV=py27
-
-    - python: "3.6"
-      env: TOXENV=py36
-
-    # MCPServer
-
-    - python: "2.7"
-      env: TOXENV=mcpserver
-
-    - python: "3.6"
-      env: TOXENV=mcpserver
-
-    # Linters
-
-    - python: "3.7"
-      env: TOXENV=linting
-
-    # Dashboard JS
-
-    - language: node_js
-      node_js: "8"
-      cache: npm
-      before_install:
-        - cd ./src/dashboard/frontend/
-      install: npm install
-      before_script:
-        - '' # override global before_script
-      script: npm run "test-single-run"
-      addons:
-        chrome: stable
-
-  allow_failures:
-
-    - python: "3.6"
-      env: TOXENV=py36
-
-    - python: "3.6"
-      env: TOXENV=mcpserver
+  email:
+    - "wellcomedigitalplatform@wellcome.ac.uk"
