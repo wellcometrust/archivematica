@@ -44,11 +44,11 @@ dashboard-publish: dashboard-build
 mcp_client-build:
 	$(call build_image,archivematica_mcp_client,MCPClient)
 
-mcp_client-publish: dashboard-build
+mcp_client-publish: mcp_client-build
 	$(call publish_service,archivematica_mcp_client)
 
 mcp_server-build:
 	$(call build_image,archivematica_mcp_server,MCPServer)
 
-mcp_server-publish: dashboard-build
+mcp_server-publish: mcp_server-build
 	$(call publish_service,archivematica_mcp_server)
