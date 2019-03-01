@@ -1,0 +1,7 @@
+-r base.txt
+
+pytest>=2,<3
+pytest-django>=2,<3
+pytest-mock>=1,<2
+pytest-pythonpath
+tox
