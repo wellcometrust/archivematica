@@ -115,12 +115,14 @@ def main(job, command_uuid, file_path, file_uuid, disable_reidentify):
     # Save the selected ID command for use in a later chain
     save_idtool(file_, command_uuid)
 
-    exitcode, output, _ = executeOrRun(command.script_type, command.script, arguments=[file_path], printing=False,
+    exitcode, output, err = executeOrRun(command.script_type, command.script, arguments=[file_path], printing=False,
                                        capture_output=True)
+
     output = output.strip()
 
     if exitcode != 0:
         job.print_error('Error: IDCommand with UUID {} exited non-zero.'.format(command_uuid))
+        job.print_error("Error: {}".format(err))
         return 255
 
     job.print_output('Command output:', output)
