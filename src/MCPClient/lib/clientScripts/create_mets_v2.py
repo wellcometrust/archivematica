@@ -780,6 +780,7 @@ def createFileSec(job,
                 job.pyprint('No uuid for file: "', directoryPathSTR, '"',
                             file=sys.stderr)
                 state.error_accumulator.error_count += 1
+                continue
 
             use = f.filegrpuse
             label = f.label
