@@ -23,6 +23,7 @@
 
 import string
 import os
+import re
 from shutil import move as rename
 import sys
 import unicodedata
@@ -30,21 +31,15 @@ from unidecode import unidecode
 from archivematicaFunctions import strToUnicode, unicodeToStr
 
 VERSION = "1.10." + "$Id$".split(" ")[1]
-valid = "-_.()" + string.ascii_letters + string.digits
-replacementChar = "_"
+
+# Letters, digits and a few punctuation characters
+ALLOWED_CHARS = re.compile(r'[^a-zA-Z0-9\-_.\(\)]')
+REPLACEMENT_CHAR = "_"
 
 
 def sanitizeName(basename):
-    ret = ""
-    # We get a more meaningful name sanitization if UTF-8 names
-    # are correctly decoded to unistrings instead of str
-    basename = unidecode(strToUnicode(basename))
-    for c in basename:
-        if c in valid:
-            ret += c
-        else:
-            ret += replacementChar
-    return ret.encode('utf-8')
+    unicode_name = unidecode(strToUnicode(basename))
+    return ALLOWED_CHARS.sub("_", unicode_name)
 
 
 class RenameFailed(Exception):
@@ -65,7 +60,7 @@ def sanitizePath(path):
         sanitizedName = os.path.join(dirname, fileTitle + fileExtension)
 
         while os.path.exists(sanitizedName):
-            sanitizedName = os.path.join(dirname, fileTitle + replacementChar + str(n) + fileExtension)
+            sanitizedName = os.path.join(dirname, fileTitle + REPLACEMENT_CHAR + str(n) + fileExtension)
             n += 1
         exit_status = rename(path, sanitizedName)
         if exit_status:
