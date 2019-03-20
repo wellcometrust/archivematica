@@ -27,25 +27,18 @@ from shutil import move as rename
 import sys
 import unicodedata
 from unidecode import unidecode
-from archivematicaFunctions import unicodeToStr
+from archivematicaFunctions import strToUnicode, unicodeToStr
 
 VERSION = "1.10." + "$Id$".split(" ")[1]
 valid = "-_.()" + string.ascii_letters + string.digits
 replacementChar = "_"
 
 
-def transliterate(basename):
-    # We get a more meaningful name sanitization if UTF-8 names
-    # are correctly decoded to unistrings instead of str
-    try:
-        return unidecode(basename.decode("utf-8"))
-    except UnicodeDecodeError:
-        return unidecode(basename)
-
-
 def sanitizeName(basename):
     ret = ""
-    basename = transliterate(basename)
+    # We get a more meaningful name sanitization if UTF-8 names
+    # are correctly decoded to unistrings instead of str
+    basename = unidecode(strToUnicode(basename))
     for c in basename:
         if c in valid:
             ret += c

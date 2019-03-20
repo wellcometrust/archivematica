@@ -6,6 +6,7 @@ import shutil
 import sys
 
 from django.test import TestCase
+import pytest
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.abspath(os.path.join(THIS_DIR, "../lib/clientScripts")))
@@ -13,6 +14,7 @@ sys.path.append(os.path.abspath(os.path.join(THIS_DIR, "../lib/clientScripts")))
 from main.models import Event, File, Transfer
 
 from job import Job
+import sanitize_names
 import sanitize_object_names
 from . import TempDirMixin
 
@@ -128,3 +130,11 @@ class TestSanitize(TempDirMixin, TestCase):
         finally:
             # Delete files
             shutil.rmtree(transfer_path)
+
+
+@pytest.mark.parametrize("basename, expected_name", [
+    ("helloworld", "helloworld"),
+    (u"a\x80b", "ab"),
+])
+def test_sanitizeName(basename, expected_name):
+    assert sanitize_names.sanitizeName(basename) == expected_name
