@@ -58,7 +58,7 @@ def call(jobs):
                     job.pyprint("invalid unit type: ", unitType, file=sys.stderr)
                     job.set_status(1)
                     continue
-                dst = sanitizePath(job, SIPDirectory)
+                dst = sanitizePath(SIPDirectory)
                 if SIPDirectory != dst:
                     dst = dst.replace(sharedDirectoryPath, "%sharedPath%", 1) + "/"
                     job.pyprint(

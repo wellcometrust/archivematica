@@ -59,7 +59,7 @@ class RenameFailed(Exception):
         self.code = code
 
 
-def sanitizePath(job, path):
+def sanitizePath(path):
     basename = os.path.basename(path)
     dirname = os.path.dirname(path)
     sanitizedName = sanitizeName(basename)
@@ -83,18 +83,18 @@ def sanitizePath(job, path):
         return sanitizedName
 
 
-def sanitizeRecursively(job, path):
+def sanitizeRecursively(path):
     path = os.path.abspath(path)
     sanitizations = {}
 
-    sanitizedName = sanitizePath(job, path)
+    sanitizedName = sanitizePath(path)
     if sanitizedName != path:
         path_key = unicodeToStr(unicodedata.normalize("NFC", path.decode("utf8")))
         sanitizations[path_key] = sanitizedName
     if os.path.isdir(sanitizedName):
         for f in os.listdir(sanitizedName):
             sanitizations.update(
-                sanitizeRecursively(job, os.path.join(sanitizedName, f))
+                sanitizeRecursively(os.path.join(sanitizedName, f))
             )
 
     return sanitizations
@@ -110,7 +110,7 @@ def call(jobs):
                     job.set_status(255)
                     continue
                 job.pyprint("Scanning: ", path)
-                sanitizations = sanitizeRecursively(job, path)
+                sanitizations = sanitizeRecursively(path)
                 for oldfile, newfile in sanitizations.items():
                     job.pyprint(oldfile, " -> ", newfile)
                 job.pyprint(
