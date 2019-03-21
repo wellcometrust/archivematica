@@ -28,7 +28,10 @@ COPY MCPClient/ /src/MCPClient/
 COPY archivematicaCommon/lib/externals/fido/ /usr/lib/archivematica/archivematicaCommon/externals/fido/
 COPY archivematicaCommon/lib/externals/fiwalk_plugins/ /usr/lib/archivematica/archivematicaCommon/externals/fiwalk_plugins/
 
-
 USER archivematica
 
-ENTRYPOINT ["/src/MCPClient/lib/archivematicaClient.py"]
+ARG GIT_COMMIT
+ENV GIT_COMMIT=$GIT_COMMIT
+COPY run_mcpclient.sh /
+
+ENTRYPOINT ["/run_mcpclient.sh"]
