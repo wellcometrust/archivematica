@@ -42,4 +42,8 @@ RUN set -ex \
 
 USER archivematica
 
-ENTRYPOINT ["/src/MCPServer/lib/archivematicaMCP.py"]
+ARG GIT_COMMIT
+ENV GIT_COMMIT=$GIT_COMMIT
+COPY run_mcpserver.sh /
+
+ENTRYPOINT ["/run_mcpserver.sh"]
