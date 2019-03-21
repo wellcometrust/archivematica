@@ -1,5 +1,6 @@
 # Wellcome specific
 secrets.zip
+.releases
 
 *.py[co]
 *.mo
