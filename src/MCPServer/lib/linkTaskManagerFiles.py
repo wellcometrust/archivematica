@@ -124,10 +124,14 @@ class linkTaskManagerFiles(LinkTaskManager):
             if self.jobChainLink.passVar is not None:
                 if isinstance(self.jobChainLink.passVar, list):
                     for passVar in self.jobChainLink.passVar:
+                        LOGGER.debug('Substituting passvar %s', passVar)
                         if isinstance(passVar, ReplacementDict):
                             arguments, standardOutputFile, standardErrorFile = passVar.replace(arguments, standardOutputFile, standardErrorFile)
+                        LOGGER.debug('Arguments %s', arguments)
                 elif isinstance(self.jobChainLink.passVar, ReplacementDict):
+                    LOGGER.debug('Substituting passvar %s', self.jobChainLink.passVar)
                     arguments, standardOutputFile, standardErrorFile = self.jobChainLink.passVar.replace(arguments, standardOutputFile, standardErrorFile)
+                    LOGGER.debug('Arguments %s', arguments)
 
             # Apply file replacement values
             commandReplacementDic = fileUnit.getReplacementDic()
