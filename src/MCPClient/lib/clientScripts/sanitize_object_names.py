@@ -53,7 +53,7 @@ def sanitize_object_names(job, objectsDirectory, sipUUID, date, groupType, group
                 transfer=transfer_mdl).all()
 
     # Sanitize objects on disk
-    sanitizations = sanitize_names.sanitizeRecursively(job, objectsDirectory)
+    sanitizations = sanitize_names.sanitizeRecursively(objectsDirectory)
     for oldfile, newfile in sanitizations.items():
         logger.info('sanitizations: %s -> %s', oldfile, newfile)
 
