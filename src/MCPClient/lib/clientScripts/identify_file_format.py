@@ -41,6 +41,7 @@ def save_idtool(file_, value):
         "%IDCommand%": value
     }
 
+    LOGGER.debug("Saving IDCommand for %s: %s" , unit.pk, value)
     UnitVariable.objects.create(unituuid=unit.pk, variable='replacementDict', variablevalue=str(rd))
 
 
