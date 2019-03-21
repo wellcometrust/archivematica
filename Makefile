@@ -16,7 +16,7 @@ ACCOUNT_ID = 299497370133
 define build_image
 	$(DOCKER_RUN) --dind -- $(IMAGE_BUILDER_IMAGE) \
 		--name=$(1) \
-		--build-arg GIT_COMMIT=$(shell git rev-parse HEAD) \
+		--build-arg GIT_COMMIT="$(shell git log -1 --pretty=format:'%h -- %ai -- %an -- %s')" \
 		--path=src/$(2).Dockerfile
 endef
 
