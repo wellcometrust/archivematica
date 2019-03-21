@@ -14,7 +14,10 @@ ACCOUNT_ID = 299497370133
 #   $2 - Name of the Dockerfile in the src directory
 #
 define build_image
-	$(DOCKER_RUN) --dind -- $(IMAGE_BUILDER_IMAGE) --name=$(1) --path=src/$(2).Dockerfile
+	$(DOCKER_RUN) --dind -- $(IMAGE_BUILDER_IMAGE) \
+		--name=$(1) \
+		--build-arg GIT_COMMIT="$(shell git log -1 --pretty=format:'%h -- %ai -- %an -- %s')" \
+		--path=src/$(2).Dockerfile
 endef
 
 

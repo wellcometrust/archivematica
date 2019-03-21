@@ -61,4 +61,8 @@ RUN env \
 
 EXPOSE 8000
 
-ENTRYPOINT ["/usr/local/bin/gunicorn", "--config=/etc/archivematica/dashboard.gunicorn-config.py", "wsgi:application"]
+ARG GIT_COMMIT
+ENV GIT_COMMIT=$GIT_COMMIT
+COPY run_dashboard.sh /
+
+ENTRYPOINT ["/run_dashboard.sh"]
