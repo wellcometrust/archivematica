@@ -12,9 +12,11 @@ from main.models import FileFormatVersion, File, FileID, UnitVariable
 from django.db import transaction
 
 # archivematicaCommon
+from custom_handlers import get_script_logger
 from executeOrRunSubProcess import executeOrRun
 from databaseFunctions import getUTCDate, insertIntoEvents
 
+logger = get_script_logger('archivematica.mcp.client.identifyFileFormat')
 
 def concurrent_instances():
     return multiprocessing.cpu_count()
@@ -41,7 +43,7 @@ def save_idtool(file_, value):
         "%IDCommand%": value
     }
 
-    LOGGER.debug("Saving IDCommand for %s: %s" , unit.pk, value)
+    logger.debug("Saving IDCommand for %s: %s" , unit.pk, value)
     UnitVariable.objects.create(unituuid=unit.pk, variable='replacementDict', variablevalue=str(rd))
 
 
