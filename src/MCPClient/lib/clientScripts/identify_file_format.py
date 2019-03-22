@@ -116,6 +116,7 @@ def main(job, command_uuid, file_path, file_uuid, disable_reidentify):
         return 0
 
     # Save the selected ID command for use in a later chain
+    job.print_output("Saving command_uuid (%s: %s)", file_uuid, command_uuid)
     save_idtool(file_, command_uuid)
 
     exitcode, output, err = executeOrRun(command.script_type, command.script, arguments=[file_path], printing=False,
