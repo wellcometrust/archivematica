@@ -53,6 +53,8 @@ def fetchUnitVariableForUnit(unit_uuid):
         rd = ReplacementDict.fromstring(replacement_dict)
         results.update(rd)
 
+    LOGGER.debug("Replacement dict for unit %s: %s", unit_uuid, results)
+
     return results
 
 
