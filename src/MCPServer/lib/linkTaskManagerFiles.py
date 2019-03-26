@@ -135,10 +135,13 @@ class linkTaskManagerFiles(LinkTaskManager):
 
             # Apply file replacement values
             commandReplacementDic = fileUnit.getReplacementDic()
+            LOGGER.debug('File %s (%s)', fileUnit.currentPath, fileUnit.UUID)
+            LOGGER.debug("Substituting file values: %s" % commandReplacementDic)
             for key, value in commandReplacementDic.items():
                 # Escape values for shell
                 commandReplacementDic[key] = archivematicaFunctions.escapeForCommand(value)
             arguments, standardOutputFile, standardErrorFile = commandReplacementDic.replace(arguments, standardOutputFile, standardErrorFile)
+            LOGGER.debug("Arguments %s", arguments)
 
             # Apply unit (SIP/Transfer) replacement values
             arguments, standardOutputFile, standardErrorFile = SIPReplacementDic.replace(arguments, standardOutputFile, standardErrorFile)
