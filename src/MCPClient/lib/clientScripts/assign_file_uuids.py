@@ -152,6 +152,7 @@ def main(job, file_uuid=None, file_path='', date='', event_uuid=None, sip_direct
     if sip_uuid:
         file_uuid = str(uuid.uuid4())
         file_path_relative_to_sip = file_path.replace(sip_directory, "%SIPDirectory%", 1)
+        logger.info(u'Generated UUID for this file (%s): %s.', file_path_relative_to_sip, file_uuid)
         addFileToSIP(file_path_relative_to_sip, file_uuid, sip_uuid, event_uuid, date, use=use)
         return 0
 
