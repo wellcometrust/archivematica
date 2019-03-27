@@ -49,6 +49,10 @@ class linkTaskManagerFiles(LinkTaskManager):
     def __init__(self, jobChainLink, unit):
         super(linkTaskManagerFiles, self).__init__(jobChainLink, unit)
 
+        LOGGER.debug('Waiting for filesystem to catch up')
+        import time
+        time.sleep(5)
+
         unit.reloadFileList()
 
         # The list of task groups we'll be executing for this batch of files
