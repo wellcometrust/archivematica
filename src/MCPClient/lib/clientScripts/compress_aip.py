@@ -105,6 +105,17 @@ def compress_aip(
             'algorithm="{}"\; '
             'version="`7z | grep Version`"'.format(compression_algorithm)
         )
+    elif program == 'gzip':
+        compressed_location = uncompressed_location + ".tar.gz"
+        command = '/bin/tar -c --directory "{sip_directory}" "{archive_path}" | /bin/gzip -{level} > "{compressed_location}"'.format(
+            sip_directory=sip_directory, archive_path=archive_path,
+            level=compression_level, compressed_location=compressed_location
+        )
+        tool_info_command = (
+            'echo program="gzip"\; '
+            'algorithm="{}"\; '
+            'version="$((gzip -V) 2>&1)"'.format(compression_algorithm)
+        )
     else:
         msg = "Program {} not recognized, exiting script prematurely.".format(program)
         job.pyprint(msg, file=sys.stderr)
