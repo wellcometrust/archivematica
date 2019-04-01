@@ -1080,6 +1080,15 @@
                         "items": {
                             "AIPCompressionAlgorithm": "zip-deflate"
                         }
+                    },
+                    {
+                        "description": {
+                            "en": "gzip"
+                        },
+                        "id": "9ce711ab-96d1-45dd-8708-de69698c1424",
+                        "items": {
+                            "AIPCompressionAlgorithm": "gzip-"
+                        }
                     }
                 ]
             },
