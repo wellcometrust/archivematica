@@ -90,8 +90,6 @@ def bag_with_empty_directories(job, destination, sip_directory, sip_uuid, algori
     )
     create_directories(os.path.join(destination, "data"), dir_list)
 
-    shutil.rmtree(tmp_dir)
-
 
 def call(jobs):
     # Parse arguments
