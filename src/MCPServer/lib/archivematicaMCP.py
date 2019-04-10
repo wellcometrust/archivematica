@@ -277,6 +277,7 @@ def created_shared_directory_structure():
         "watchedDirectories/activeTransfers/maildir",
         "watchedDirectories/activeTransfers/standardTransfer",
         "watchedDirectories/activeTransfers/TRIM",
+        "watchedDirectories/activeTransfers/zippedDirectory",
         "watchedDirectories/approveNormalization",
         "watchedDirectories/approveSubmissionDocumentationIngest",
         "watchedDirectories/quarantined",
