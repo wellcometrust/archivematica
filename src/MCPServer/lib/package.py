@@ -29,6 +29,7 @@ from django.conf import settings as django_settings
 from archivematicaFunctions import unicodeToStr
 from databaseFunctions import auto_close_db
 from executor import Executor
+from fileOperations import get_extract_dir_name
 from jobChain import jobChain
 from main.models import Transfer, TransferMetadataSet
 import storageService as storage_service
@@ -252,11 +253,13 @@ def _move_to_internal_shared_dir(filepath, dest, transfer):
     error = _check_filepath_exists(filepath)
     if error:
         raise Exception(error)
+
+    is_dir = os.path.isdir(filepath)
     # Confine destination to subdir of originals.
     basename = os.path.basename(filepath)
     dest = _pad_destination_filepath_if_it_already_exists(os.path.join(dest, basename))
     # Ensure directories end with a trailing slash.
-    if os.path.isdir(filepath):
+    if is_dir:
         dest = os.path.join(dest, "")
     try:
         shutil.move(filepath, dest)
@@ -267,6 +270,29 @@ def _move_to_internal_shared_dir(filepath, dest, transfer):
             django_settings.SHARED_DIRECTORY, "%sharedPath%", 1
         )
         transfer.save()
+
+    if not is_dir:
+        # Transfer is not a directory so it is an uploaded zipfile.
+        # Precreate the extraction directory for the uploaded zipfile
+        extract_dir = get_extract_dir_name(dest)
+        try:
+            os.mkdir(extract_dir)
+        except OSError as e:
+            raise Exception("Error creating extraction dir %s (%s)", extract_dir, e)
+
+        # Move the processing config into the extraction directory so that it
+        # is preserved and used in the workflow
+        config_path = os.path.join(os.path.dirname(filepath), "processingMCP.xml")
+        if os.path.isfile(config_path):
+            try:
+                shutil.move(config_path, extract_dir)
+            except shutil.Error as e:
+                raise Exception(
+                    "Error moving processing config %s to %s (%s)",
+                    config_path,
+                    extract_dir,
+                    e,
+                )
 
 
 def create_package(
