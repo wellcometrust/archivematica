@@ -412,10 +412,10 @@ def get_extract_dir_name(filename):
          transfer2.tar.gz will be extracted into transfer2
     """
     filename = Path(filename)
-    extract_dir = Path(filename.stem)
-
-    if filename == extract_dir:
+    if not filename.suffix:
         raise ValueError("Filename '%s' must have an extension", filename)
+
+    extract_dir = filename.parent / filename.stem
 
     # trim off '.tar' if present
     if extract_dir.suffix in (".tar", ".TAR"):
