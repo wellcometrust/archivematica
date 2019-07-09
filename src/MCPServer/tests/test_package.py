@@ -56,24 +56,24 @@ def test__determine_transfer_paths(name, path, tmpdir, expected):
 class TestPadDestinationFilePath:
     def test_zipfile_is_not_padded_if_does_not_exist(self, tmp_path):
         transfer_path = tmp_path / "transfer.zip"
-        padded_path = _pad_destination_filepath_if_it_already_exists(str(transfer_path))
+        padded_path = _pad_destination_filepath_if_it_already_exists(transfer_path)
         assert padded_path == str(transfer_path)
 
     def test_zipfile_is_padded_if_exists(self, tmp_path):
         transfer_path = tmp_path / "transfer.zip"
         transfer_path.touch()
-        padded_path = _pad_destination_filepath_if_it_already_exists(str(transfer_path))
+        padded_path = _pad_destination_filepath_if_it_already_exists(transfer_path)
         assert padded_path == str(tmp_path / "transfer_1.zip")
 
     def test_dir_is_not_padded_if_does_not_exist(self, tmp_path):
         transfer_path = tmp_path / "transfer/"
-        padded_path = _pad_destination_filepath_if_it_already_exists(str(transfer_path))
+        padded_path = _pad_destination_filepath_if_it_already_exists(transfer_path)
         assert padded_path == str(transfer_path)
 
     def test_dir_is_padded_if_exists(self, tmp_path):
         transfer_path = tmp_path / "transfer/"
         transfer_path.mkdir()
-        padded_path = _pad_destination_filepath_if_it_already_exists(str(transfer_path))
+        padded_path = _pad_destination_filepath_if_it_already_exists(transfer_path)
         assert padded_path == str(tmp_path / "transfer_1")
 
 

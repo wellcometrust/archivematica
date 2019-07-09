@@ -35,6 +35,11 @@ from main.models import Transfer, TransferMetadataSet
 import storageService as storage_service
 from unitTransfer import unitTransfer
 
+try:
+    from pathlib import Path
+except ImportError:
+    from pathlib2 import Path
+
 
 logger = logging.getLogger("archivematica.mcp.server")
 
@@ -137,22 +142,27 @@ def _file_is_an_archive(filepath):
 def _pad_destination_filepath_if_it_already_exists(filepath, original=None, attempt=0):
     if original is None:
         original = filepath
+    filepath = Path(filepath)
+    original = Path(original)
+
     attempt = attempt + 1
-    if not os.path.exists(filepath):
+    if not filepath.exists():
         return filepath
-    if os.path.isdir(filepath):
+    if filepath.is_dir():
         return _pad_destination_filepath_if_it_already_exists(
-            original + "_" + str(attempt), original, attempt
+            "{}_{}".format(original, attempt), original, attempt
         )
+
     # need to work out basename
-    basedirectory = os.path.dirname(original)
-    basename = os.path.basename(original)
+    basedirectory = original.parent
+    basename = original.name
+
     # do more complex padding to preserve file extension
     period_position = basename.index(".")
     non_extension = basename[0:period_position]
     extension = basename[period_position:]
     new_basename = "{}_{}{}".format(non_extension, attempt, extension)
-    new_filepath = os.path.join(basedirectory, new_basename)
+    new_filepath = basedirectory / new_basename
     return _pad_destination_filepath_if_it_already_exists(
         new_filepath, original, attempt
     )
@@ -195,7 +205,7 @@ def _copy_from_transfer_sources(paths, relative_destination):
     files = {l["uuid"]: {"location": l, "files": []} for l in transfer_sources}
 
     for item in paths:
-        location, path = Path(item).parts()
+        location, path = LocationPath(item).parts()
         if location is None:
             location = _default_transfer_source_location_uuid()
         if location not in files:
@@ -411,7 +421,7 @@ def _capture_transfer_failure(fn):
 def _determine_transfer_paths(name, path, tmpdir):
     if _file_is_an_archive(path):
         transfer_dir = tmpdir
-        p = Path(path).path
+        p = LocationPath(path).path
         filepath = os.path.join(tmpdir, os.path.basename(p))
     else:
         path = os.path.join(path, ".")  # Copy contents of dir but not dir
@@ -536,7 +546,7 @@ def _copy_processing_config(processing_config, transfer_pk, transfer_rel):
         )
 
 
-class Path(object):
+class LocationPath(object):
     """Path wraps a path that is a pair of two values: UUID and path."""
 
     uuid, path = None, None
