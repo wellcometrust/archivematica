@@ -418,7 +418,7 @@ def get_extract_dir_name(filename):
         raise ValueError("Filename '%s' must have an extension", filename)
 
     # trim off '.tar' if present
-    if extract_dir.suffix in ('.tar', '.TAR'):
+    if extract_dir.suffix in (".tar", ".TAR"):
         extract_dir = extract_dir.stem
 
     return str(extract_dir)
