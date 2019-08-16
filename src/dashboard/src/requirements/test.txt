@@ -40,6 +40,7 @@ greenlet==0.4.15
 gunicorn==19.9.0
 idna==2.8
 ipaddress==1.0.22
+josepy==1.2.0
 lazy-paged-sequence==0.3
 logutils==0.3.3
 lxml==3.5.0
@@ -47,6 +48,7 @@ metsrw==0.3.14
 mock==2.0.0               # via mockldap, vcrpy
 mockldap==0.2.8
 more-itertools==5.0.0     # via pytest
+mozilla-django-oidc==1.0.0
 mysqlclient==1.3.7
 ndg-httpsclient==0.5.1
 pathlib2==2.3.3
