@@ -307,7 +307,9 @@ def stream_file_from_storage_service(
     header_content_disposition = "Content-Disposition"
     content_disposition_inline = "inline"
     storage_timeout = django_settings.STORAGE_SERVICE_CLIENT_TIMEOUT
+    logger.debug("Streaming %s from storage service", url)
     stream = requests.get(url, stream=True, timeout=storage_timeout)
+    logger.debug("Streaming response %d", stream.status_code)
     if stream.status_code == 200:
         content_type = stream.headers.get("content-type", "text/plain")
         response = StreamingHttpResponse(stream, content_type=content_type)
