@@ -69,6 +69,11 @@ CONFIG_MAPPING = {
         "option": "ldap_authentication",
         "type": "boolean",
     },
+    "oidc_authentication": {
+        "section": "Dashboard",
+        "option": "oidc_authentication",
+        "type": "boolean",
+    },
     "storage_service_client_timeout": {
         "section": "Dashboard",
         "option": "storage_service_client_timeout",
@@ -117,6 +122,7 @@ search_enabled = true
 gearman_server = 127.0.0.1:4730
 shibboleth_authentication = False
 ldap_authentication = False
+oidc_authentication = False
 storage_service_client_timeout = 86400
 storage_service_client_quick_timeout = 5
 agentarchives_client_timeout = 300
@@ -420,6 +426,7 @@ STATUS_POLLING_INTERVAL = 5  # Seconds
 TASKS_PER_PAGE = 10  # for paging in tasks dialog
 UUID_REGEX = "[\w]{8}(-[\w]{4}){3}-[\w]{12}"
 
+
 MICROSERVICES_HELP = {
     "Approve transfer": _(
         'Select "Approve transfer" to begin processing or "Reject transfer" to start over again.'
@@ -507,6 +514,18 @@ if LDAP_AUTHENTICATION:
 
     AUTHENTICATION_BACKENDS += ["components.accounts.backends.CustomLDAPBackend"]
     from .components.ldap_auth import *  # noqa
+
+
+OIDC_AUTHENTICATION = config.get("oidc_authentication")
+if OIDC_AUTHENTICATION:
+    ALLOW_USER_EDITS = False
+
+    AUTHENTICATION_BACKENDS += ["components.accounts.backends.CustomOIDCBackend"]
+    LOGIN_EXEMPT_URLS.append(r"^oidc")
+    INSTALLED_APPS += ["mozilla_django_oidc"]
+
+    from .components.oidc_auth import *  # noqa
+
 
 # Apply email settings
 globals().update(email_settings.get_settings(config))
