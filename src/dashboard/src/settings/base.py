@@ -292,6 +292,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.messages.context_processors.messages",
                 "main.context_processors.search_enabled",
+                "main.context_processors.auth_methods",
             ],
             "debug": DEBUG,
         },
