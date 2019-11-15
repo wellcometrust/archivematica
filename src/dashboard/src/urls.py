@@ -45,7 +45,10 @@ urlpatterns = [
     url(r"^file/", include("components.file.urls")),
     url(r"^access/", include("components.access.urls")),
     url(r"^backlog/", include("components.backlog.urls")),
-    url(r'^oidc/', include('mozilla_django_oidc.urls')),
     url(r"", include("main.urls")),
-
 ]
+
+if settings.OIDC_AUTHENTICATION:
+    urlpatterns += [
+        url(r'^oidc/', include('mozilla_django_oidc.urls')),
+    ]
