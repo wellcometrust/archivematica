@@ -47,3 +47,8 @@ urlpatterns = [
     url(r"^backlog/", include("components.backlog.urls")),
     url(r"", include("main.urls")),
 ]
+
+if settings.OIDC_AUTHENTICATION:
+    urlpatterns += [
+        url(r'^oidc/', include('mozilla_django_oidc.urls')),
+    ]
