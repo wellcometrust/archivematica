@@ -95,7 +95,7 @@ if __name__ == '__main__':
         cmd += _aws_credentials_args()
 
     if namespace.docker_in_docker:
-        cmd += ['--volume', '%s:/repo' % ROOT]
+        cmd += ['--volume', '%s:/repo' % ROOT.encode()]
         cmd += ['--volume', '/var/run/docker.sock:/var/run/docker.sock']
 
     if namespace.share_sbt_dirs:
@@ -103,7 +103,7 @@ if __name__ == '__main__':
         cmd += ['--volume', '%s/.ivy2:/root/.ivy2' % os.environ['HOME']]
 
     if namespace.expose_host_root_folder:
-        cmd += ['-e', 'ROOT=%s' % ROOT]
+        cmd += ['-e', 'ROOT=%s' % ROOT.encode()]
 
     if additional_args[0] == '--':
         additional_args = additional_args[1:]
