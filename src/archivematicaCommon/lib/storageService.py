@@ -376,7 +376,13 @@ def create_file(
         try:
             session = _storage_api_session()
             url = _storage_service_url() + "file/async/"
-            response = session.post(url, json=new_file, allow_redirects=False)
+            try:
+                response = session.post(url, json=new_file, allow_redirects=False)
+            except Exception as err:
+                print("@@AWLC err=%r" % err)
+                print("@@AWLC url=%r" % url)
+                print("@@AWLC new_file=%r" % new_file)
+                raise
             ret = wait_for_async(response)
         except requests.exceptions.RequestException as err:
             LOGGER.warning(errmsg, new_file, err)
