@@ -42,6 +42,7 @@ class ApiKeyAuth(AuthBase):
 
     def __call__(self, r):
         r.headers["Authorization"] = "ApiKey {0}:{1}".format(self.username, self.apikey)
+        print("@@AWLC r.headers=%r" % r.headers)
         return r
 
 
@@ -65,6 +66,9 @@ def _storage_api_session(timeout=django_settings.STORAGE_SERVICE_CLIENT_QUICK_TI
         def __init__(self, timeout=None, *args, **kwargs):
             self.timeout = timeout
             super(HTTPAdapterWithTimeout, self).__init__(*args, **kwargs)
+
+        def __repr__(self):
+            return "<HTTPAdapterWithTimeout timeout=%r>" % self.timeout
 
         def send(self, *args, **kwargs):
             kwargs["timeout"] = self.timeout
@@ -375,13 +379,18 @@ def create_file(
     else:
         try:
             session = _storage_api_session()
+            print("@@AWLC session=%r" % session)
+            import time; t0 = time.time()
             url = _storage_service_url() + "file/async/"
             try:
                 response = session.post(url, json=new_file, allow_redirects=False)
             except Exception as err:
+                t1 = time.time()
                 print("@@AWLC err=%r" % err)
                 print("@@AWLC url=%r" % url)
                 print("@@AWLC new_file=%r" % new_file)
+                print("@@AWLC t0=%r" % t0)
+                print("@@AWLC t1=%r" % t1)
                 raise
             ret = wait_for_async(response)
         except requests.exceptions.RequestException as err:
