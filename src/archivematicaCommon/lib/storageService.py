@@ -377,8 +377,23 @@ def create_file(
         else:
             ret = response.json()
     else:
+        class AlexApiKeyAuth(AuthBase):
+            def __call__(self, r):
+                r.headers["Authorization"] = "ApiKey admin:431127153582247c3d3028b941a6665df19868698a567ab94b07832c0ad728a5"
+                return r
+
+
+        class AlexHTTPAdapterWithTimeout(requests.adapters.HTTPAdapter):
+            def send(self, *args, **kwargs):
+                kwargs["timeout"] = 5
+                return super(HTTPAdapterWithTimeout, self).send(*args, **kwargs)
+
         try:
-            session = _storage_api_session()
+            session = requests.session()
+            session.auth = AlexApiKeyAuth()
+            session.mount("http://", AlexHTTPAdapterWithTimeout())
+            session.mount("https://", AlexHTTPAdapterWithTimeout())
+
             print("@@AWLC session=%r" % session)
             import time; t0 = time.time()
             url = _storage_service_url() + "file/async/"
