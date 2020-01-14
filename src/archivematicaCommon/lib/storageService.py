@@ -42,7 +42,6 @@ class ApiKeyAuth(AuthBase):
 
     def __call__(self, r):
         r.headers["Authorization"] = "ApiKey {0}:{1}".format(self.username, self.apikey)
-        print("@@AWLC r.headers=%r" % r.headers)
         return r
 
 
@@ -379,18 +378,10 @@ def create_file(
     else:
         try:
             session = _storage_api_session()
-            print("@@AWLC session=%r" % session)
-            import time; t0 = time.time()
             url = _storage_service_url() + "file/async/"
             try:
                 response = session.post(url, json=new_file, allow_redirects=False)
             except Exception as err:
-                t1 = time.time()
-                print("@@AWLC err=%r" % err)
-                print("@@AWLC url=%r" % url)
-                print("@@AWLC new_file=%r" % new_file)
-                print("@@AWLC t0=%r" % t0)
-                print("@@AWLC t1=%r" % t1)
                 raise
             ret = wait_for_async(response)
         except requests.exceptions.RequestException as err:
