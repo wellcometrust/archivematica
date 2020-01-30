@@ -628,7 +628,8 @@ def _index_aip_files(client, uuid, mets_path, name, identifiers=[], printfn=prin
     # When indexing an AIP with ~4400 files, the length of the "Index AIP" step
     # went from 81 minutes to 42 seconds.
     #
-    streaming_bulk(client=client, actions=actions(), max_retries=10)
+    for _ in streaming_bulk(client=client, actions=actions(), max_retries=10):
+        pass
 
     return len(files)
 
