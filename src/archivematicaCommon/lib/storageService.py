@@ -243,7 +243,7 @@ def wait_for_async(response, poll_seconds=2, poll_timeout_seconds=600):
     response.raise_for_status()
     poll_url = response.headers["Location"]
     while True:
-        logger.info(
+        LOGGER.info(
             "Polling for response at %s; waiting %d seconds",
             poll_url, poll_timeout_seconds
         )
