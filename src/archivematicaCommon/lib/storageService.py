@@ -225,7 +225,7 @@ def browse_location(uuid, path):
     return browse
 
 
-def wait_for_async(response, poll_seconds=2, poll_timeout_seconds=600):
+def wait_for_async(response):
     """
     Poll for results on an async endpoint.
 
@@ -240,18 +240,31 @@ def wait_for_async(response, poll_seconds=2, poll_timeout_seconds=600):
     This function may raise exceptions. The caller can expect them to be
     instances of ``requests.exceptions.RequestException``.
     """
+    min_poll_seconds = 2
+    poll_timeout_seconds = 600
+
     response.raise_for_status()
     poll_url = response.headers["Location"]
+
+    # We'll enter this loop while waiting for the Wellcome storage to store
+    # a package.  This isn't a fast process, so treat it as an exponential backoff.
+    # The first time, we'll wait 2 seconds, then 4, and so on up to 300 seconds.
+    poll_seconds = 2
+
     while True:
         LOGGER.info(
-            "Polling for response at %s; waiting %d seconds",
-            poll_url, poll_timeout_seconds
+            "Polling for response at %s; if not completed will wait %d seconds",
+            poll_url, poll_seconds
         )
         poll_response = _storage_api_session(timeout=poll_timeout_seconds).get(poll_url)
         poll_response.raise_for_status()
         payload = poll_response.json()
         if not payload["completed"]:
             time.sleep(poll_seconds)
+
+            # Double the poll timeout.  Clamp it at a max wait of 300 seconds.
+            poll_seconds = min(poll_seconds * 2, poll_timeout_seconds / 2)
+
             continue
         if payload["was_error"]:
             errmsg = "Failure storing file: {}".format(payload["error"])
