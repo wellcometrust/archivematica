@@ -7,6 +7,7 @@ the file and its UUID. There is a default list of file names that are deleted;
 however, this can be overridden in MCPClient/clientConfig.conf s
 """
 
+import errno
 import os
 import shutil
 
@@ -33,10 +34,22 @@ def remove_file(job, target_file, file_uuid):
                 uuid=file_uuid, filename=basename
             )
         )
+
+        # Actually remove the file.  We use ``os.remove()``, but this may
+        # fail if it's a directory -- if so, we recursively delete the
+        # entire contents of the directory with shutil.
+        #
+        # TODO: In Python 3, calling ``os.remove()`` on a directory throws
+        # an IsADirectoryError.  When Archivematica is Python 3-only, use
+        # this more specific exception type.
         try:
             os.remove(target_file)
-        except OSError:
-            shutil.rmtree(target_file)
+        except OSError as err:
+            if err.errno == errno.EPERM and os.path.isdir(target_file):
+                shutil.rmtree(target_file)
+            else:
+                raise
+
         # Gearman passes parameters as strings, so None (NoneType) becomes
         # "None" (string)
         if file_uuid and file_uuid != "None":
