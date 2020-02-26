@@ -9,6 +9,49 @@
 
     <h1><a href="http://www.archivematica.org">Archivematica</a></h1>
 
+    <!--
+      Wellcome note: This differs pretty heavily from the upstream Archivematica
+      login screen.
+
+      At time of writing (25 February 2020), the Archivematica login screen
+      prioritises a username/password login form.  OpenID Connect is relegated
+      to a small link below the form.
+
+      While it is in theory possible to log in this way (every Wellcome user
+      will have an underlying Archivematica user account), it's another
+      username/password to remember.  We'd rather people use Active Directory
+      to log in (aka OpenID Connect), so we've modified the login screen to
+      emphasise that option.
+
+      If you still want to log in (e.g. as an admin user), the log in form
+      is hidden behind a <details> element.
+     -->
+
+    <p>If you have a Wellcome account, you can log in to Archivematica:</p>
+
+    <p>
+      <center>
+        <button type="button" class="btn btn-primary" onclick="window.location.href='{% url 'oidc_authentication_init' %}'">Log in</button>
+      </center>
+    </p>
+
+    <!--
+      If you log in successfully with Active Directory, but Archivematica doesn't
+      know who you are (= you don't have access permissions), it redirects you back
+      to this login screen.
+
+      It would be nice if this message only appeared after a failed login attempt,
+      but I couldn't work out how to wire that up (and it would mean plumbing through
+      more of Archivematica).  This is a permanent message as a compromise.
+     -->
+    <p>
+      If you are having difficulty logging in, you might not have permission to access Archivematica.
+      Please speak to an Archivematica admin.
+    </p>
+
+    <details>
+      <summary>Log in with username and password (admin only)</summary>
+
     <form class="form-stacked" method="post" action="{% url 'django.contrib.auth.views.login' %}">
 
       {% csrf_token %}
@@ -24,11 +67,7 @@
 
     </form>
 
-    {% if oidc_enabled %}
-      <a href="{% url 'oidc_authentication_init' %}">Log in with OpenID Connect</a>
-    {% endif %}
-
-
+    </details>
   </div>
 
 {% endblock %}

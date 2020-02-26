@@ -38,3 +38,10 @@ OIDC_ACCESS_ATTRIBUTE_MAP = {"given_name": "first_name", "family_name": "last_na
 
 # map attributes from id token
 OIDC_ID_ATTRIBUTE_MAP = {"email": "email"}
+
+# This means that Archivematica won't automatically create users when somebody
+# authenticates via OIDC.
+#
+# If somebody wants to be able to log into Archivematica, they need an account
+# created by an admin user.
+OIDC_CREATE_USER = False
