@@ -3,7 +3,8 @@ import re
 
 import requests
 from django.conf import settings
-from django.core.exceptions import SuspiciousOperation
+from django.contrib import messages
+from django.core.exceptions import PermissionDenied, SuspiciousOperation
 from django.utils.encoding import smart_text
 from django_auth_ldap.backend import LDAPBackend
 from josepy.jws import JWS, Header
@@ -89,9 +90,20 @@ class CustomOIDCBackend(OIDCAuthenticationBackend):
         return info
 
     def create_user(self, user_info):
-        user = super(CustomOIDCBackend, self).create_user(user_info)
-        for attr, value in user_info.items():
-            setattr(user, attr, value)
-        user.save()
-        generate_api_key(user)
-        return user
+        # We want to explicitly gate the creation of users here --
+        # don't just create a user because OIDC has told us who they are.
+        #
+        # OIDC is an *identity* service, not an *authorisation* service.
+        # It call tell us "this person is Henry Wellcome", not "Henry Wellcome
+        # should have Archivematica access".
+        #
+        # Using `get_or_create_user()` instead of `create_user()` means we
+        # can control the creation of users with `OIDC_CREATE_USER`.
+        user = super(CustomOIDCBackend, self).get_or_create_user(user_info)
+
+        if user is not None:
+            for attr, value in user_info.items():
+                setattr(user, attr, value)
+            user.save()
+            generate_api_key(user)
+            return user

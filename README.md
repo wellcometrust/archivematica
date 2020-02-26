@@ -1,43 +1,38 @@
-[![Travis CI](https://travis-ci.org/artefactual/archivematica.svg?branch=qa/1.x)](https://travis-ci.org/artefactual/archivematica)
+# archivematica
 
-# [Archivematica](https://www.archivematica.org/)
+This is the Wellcome Collection fork of [Archivematica](https://github.com/artefactual/archivematica).
 
-By [Artefactual](https://www.artefactual.com/)
-
-Archivematica is a web- and standards-based, open-source application which allows your institution to preserve long-term access to trustworthy, authentic and reliable digital content.
-Our target users are archivists, librarians, and anyone working to preserve digital objects.
-
-You are free to copy, modify, and distribute Archivematica with attribution under the terms of the AGPLv3 license.
-See the [LICENSE](LICENSE) file for details.
+See the original repo for documentation/development notes.
+This README contains information specific to the Wellcome fork.
 
 
-## Installation
 
-* [Production installation](https://www.archivematica.org/docs/latest/admin-manual/installation-setup/installation/installation/)
-* [Development installation](https://wiki.archivematica.org/Getting_started#Installation)
+## How do we allow access to Archivematica?
 
+We use Azure Active Directory (OpenID Connect) for authentication.
+When somebody tries to log in to Archivematica, they are sent to an Active Directory login page first.
+Once you're logged in with AD, you have access to Archivematica if and only if you have been authorised by an Archivematica admin.
 
-## Other resources
+If you want to give somebody access to Archivematica:
 
-* [Website](https://www.archivematica.org/): User and administrator documentation
-* [Wiki](https://www.archivematica.org/wiki/Development): Developer facing documentation, requirements analysis and community resources
-* [Issues](https://github.com/archivematica/Issues): Git repository used for tracking Archivematica issues and feature/enhancement ideas
-* [User Google Group](https://groups.google.com/forum/#!forum/archivematica): Forum/mailing list for user questions (both technical and end-user)
-* [Paid support](https://www.artefactual.com/services/): Paid support, hosting, training, consulting and software development contracts from Artefactual
+1.  Log in to the dashboard as an admin
+2.  Select **Administration** from the top menu bar.
+3.  In the sidebar, click **Users**.
+4.  Click **Add New**.
 
+    ![](screenshot_users_pane.png)
 
-## Contributing
+5.  Fill in the new user form.
+    The two interesting fields:
 
-Thank you for your interest in Archivematica!
-For more details, see the [contributing guidelines](CONTRIBUTING.md)
+    -   Email address must match their Wellcome email address, e.g. `a.chan@wellcome.ac.uk`
+    -   The password can be anything, and they won't be using it in practice -- pick a suitably long random string and use that.
+        If you want to generate passwords and you're comfortable on the command line, try running:
 
+        ```
+        python3 -c 'import secrets; print(secrets.token_hex())'
+        ```
 
-## Related projects
+    Click **Create** when you're done.
 
-Archivematica consists of several projects working together, including:
-
-* [Archivematica](https://github.com/artefactual/archivematica): This repository! Main repository containing the user-facing dashboard, task manager MCPServer and clients scripts for the MCPClient
-* [Storage Service](https://github.com/artefactual/archivematica-storage-service): Responsible for moving files to Archivematica for processing, and from Archivematica into long-term storage
-* [Format Policy Registry](https://github.com/artefactual/archivematica/tree/qa/1.x/src/dashboard/src/fpr): Submodule shared between Archivematica and the Format Policy Registry (FPR) server that displays and updates FPR rules and commands
-
-For more projects in the Archivematica ecosystem, see the [getting started](https://wiki.archivematica.org/Getting_started#Projects) page.
+To remove somebody's access, delete the user with their email address.
