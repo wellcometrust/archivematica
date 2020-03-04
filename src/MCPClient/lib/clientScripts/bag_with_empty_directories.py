@@ -21,6 +21,7 @@
 # @author Joseph Perry <joseph@artefactual.com>
 
 import argparse
+import errno
 import multiprocessing
 import os
 import shutil
@@ -57,13 +58,21 @@ def create_directories(base_dir, dir_list):
     command, but create any empty (or unspecified) directories. """
     for directory in dir_list:
         directory = os.path.join(base_dir, directory)
-        try:
-            os.makedirs(directory)
-        except os.error:
-            pass
+        mkdir_p(directory)
 
 
 _PAYLOAD_ENTRIES = ("logs/", "objects/", "README.html", "thumbnails/", "metadata/")
+
+
+def mkdir_p(path):
+    # https://stackoverflow.com/a/600612/1558022
+    try:
+        os.makedirs(path)
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
 
 
 def bag_with_empty_directories(job, destination, sip_directory, sip_uuid, algorithm):
@@ -71,7 +80,8 @@ def bag_with_empty_directories(job, destination, sip_directory, sip_uuid, algori
     # Get list of directories in SIP
     dir_list = get_sip_directories(job, sip_directory)
     payload_entries = _PAYLOAD_ENTRIES + ("METS.%s.xml" % sip_uuid,)
-    os.mkdir(destination)
+
+    mkdir_p(destination)
     for item in payload_entries:
         item = os.path.join(sip_directory, item)
         # Omit payload items that don't exist
@@ -82,12 +92,14 @@ def bag_with_empty_directories(job, destination, sip_directory, sip_uuid, algori
         else:
             dst = os.path.join(destination, os.path.basename(os.path.dirname(item)))
             shutil.copytree(item, dst)
+    job.pyprint("Calling make_bag()")
     make_bag(
         destination,
         processes=multiprocessing.cpu_count(),
         bag_info={"External-Identifier": sip_uuid},
         checksums=[algorithm],
     )
+    job.pyprint("Finished make_bag()")
     create_directories(os.path.join(destination, "data"), dir_list)
 
 
