@@ -18,8 +18,10 @@
 # along with Archivematica.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import json
 import os
 import re
+import tempfile
 import uuid
 
 # fileOperations requires Django to be set up
@@ -32,7 +34,7 @@ from main.models import File, FileFormatVersion
 
 from custom_handlers import get_script_logger
 from databaseFunctions import insertIntoDerivations
-from fileOperations import updateSizeAndChecksum
+from fileOperations import getSizeAndChecksum, updateSizeAndChecksum
 
 import metsrw
 
@@ -79,7 +81,7 @@ def get_file_info_from_mets(job, shared_path, file_):
     except IndexError:
         logger.error("Archivematica AIP: PREMIS:OBJECT could not be found")
         return {}
-    premis_object = fsentry.get_premis_objects()[0]
+
     related_object_uuid = None
     for relationship in premis_object.relationship:
         if relationship.sub_type != "is source of":
@@ -111,7 +113,36 @@ def get_file_info_from_mets(job, shared_path, file_):
     return ret
 
 
-def main(job, shared_path, file_uuid, file_path, date, event_uuid):
+def write_to_database(job, shared_path, file_uuid, file_path, date, event_uuid, kwargs):
+    try:
+        file_ = File.objects.get(uuid=file_uuid)
+    except File.DoesNotExist:
+        logger.exception("File with UUID %s cannot be found.", file_uuid)
+        return 1
+
+    # See if it's a Transfer and in particular a Archivematica AIP transfer.
+    kw = {}
+    if (
+        file_.transfer
+        and (not file_.sip)
+        and file_.transfer.type == "Archivematica AIP"
+    ):
+        info = get_file_info_from_mets(job, shared_path, file_)
+        if info.get("derivation"):
+            insertIntoDerivations(
+                sourceFileUUID=file_uuid, derivedFileUUID=info["derivation"]
+            )
+        if info.get("format_version"):
+            FileFormatVersion.objects.create(
+                file_uuid_id=file_uuid, format_version=info["format_version"]
+            )
+
+    updateSizeAndChecksum(file_uuid, file_path, date, event_uuid, **kwargs)
+
+    return 0
+
+
+def get_size_and_checksum_for_file(job, shared_path, file_uuid, file_path, event_uuid):
     try:
         file_ = File.objects.get(uuid=file_uuid)
     except File.DoesNotExist:
@@ -134,25 +165,64 @@ def main(job, shared_path, file_uuid, file_path, date, event_uuid):
             checksumType=info["checksum_type"],
             add_event=False,
         )
-        if info.get("derivation"):
-            insertIntoDerivations(
-                sourceFileUUID=file_uuid, derivedFileUUID=info["derivation"]
+
+    fileSize, checksumType, checksum = getSizeAndChecksum(
+        file_path,
+        fileSize=kw.get("fileSize"),
+        checksum=kw.get("checksum"),
+        checksumType=kw.get("checksumType")
+    )
+
+    kw.update({
+        "fileSize": fileSize,
+        "checksumType": checksumType,
+        "checksum": checksum
+    })
+
+    return kw
+
+
+def get_size_and_checksum_values(jobs):
+    """
+    Some of the files we deal with in Archivematica are large, and waiting
+    for the checksum to be computed causes the database connection to drop.
+
+    Here we precompute the checksum and size of every file *before* we open
+    the atomic database transaction.
+
+    Note: our transfer packages may contain lots of files, so we cache the
+    results to a JSON file rather than trying to hold them in memory.
+
+    This should *only* be reading from the database, never writing.
+    """
+    _, cache_file = tempfile.mkstemp(suffix=".json")
+    parser = create_parser()
+
+    for job in jobs:
+        with job.JobContext(logger=logger):
+            logger.info("Invoked as %s.", " ".join(job.args))
+
+            args = parser.parse_args(job.args[1:])
+
+            kwargs = get_size_and_checksum_for_file(
+                job=job,
+                shared_path=args.sharedPath,
+                file_uuid=args.file_uuid,
+                file_path=args.file_path,
+                event_uuid=args.event_uuid,
             )
-        if info.get("format_version"):
-            FileFormatVersion.objects.create(
-                file_uuid_id=file_uuid, format_version=info["format_version"]
-            )
 
-    updateSizeAndChecksum(file_uuid, file_path, date, event_uuid, **kw)
+            with open(cache_file, "a") as out_file:
+                out_file.write(json.dumps(kwargs) + "\n")
 
-    return 0
+    return cache_file
 
 
-def call(jobs):
+def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("sharedPath")
     parser.add_argument(
-        "-i", "--fileUUID", type=lambda x: str(uuid.UUID(x)), dest="file_uuid"
+        "-i", "--fileUUID", type=uuid.UUID, dest="file_uuid"
     )
     parser.add_argument(
         "-p", "--filePath", action="store", dest="file_path", default=""
@@ -161,24 +231,34 @@ def call(jobs):
     parser.add_argument(
         "-u",
         "--eventIdentifierUUID",
-        type=lambda x: str(uuid.UUID(x)),
+        type=uuid.UUID,
         dest="event_uuid",
     )
 
+    return parser
+
+
+def call(jobs):
+    parser = create_parser()
+
+    cache_file = get_size_and_checksum_values(jobs)
+
     with transaction.atomic():
-        for job in jobs:
-            with job.JobContext(logger=logger):
-                logger.info("Invoked as %s.", " ".join(job.args))
+        with open(cache_file) as infile:
+            for job, line in zip(jobs, infile):
+                logger.info("Writing as %s.", " ".join(job.args))
+                kwargs = json.loads(line)
 
                 args = parser.parse_args(job.args[1:])
 
                 job.set_status(
-                    main(
-                        job,
-                        args.sharedPath,
-                        args.file_uuid,
-                        args.file_path,
-                        args.date,
-                        args.event_uuid,
+                    write_to_database(
+                        job=job,
+                        shared_path=args.sharedPath,
+                        file_uuid=args.file_uuid,
+                        file_path=args.file_path,
+                        date=args.date,
+                        event_uuid=args.event_uuid,
+                        kwargs=kwargs
                     )
                 )

@@ -40,6 +40,17 @@ from archivematicaFunctions import unicodeToStr, get_setting, get_file_checksum
 from main.models import File, Transfer
 
 
+def getSizeAndChecksum(filePath, fileSize=None, checksum=None, checksumType=None):
+    if not fileSize:
+        fileSize = os.path.getsize(filePath)
+    if not checksumType:
+        checksumType = get_setting("checksum_type", "sha256")
+    if not checksum:
+        checksum = get_file_checksum(filePath, checksumType)
+
+    return (fileSize, checksumType, checksum)
+
+
 def updateSizeAndChecksum(
     fileUUID,
     filePath,
@@ -57,12 +68,12 @@ def updateSizeAndChecksum(
     Finally, insert the corresponding Event. This behavior can be cancelled
     using the boolean keyword 'add_event'.
     """
-    if not fileSize:
-        fileSize = os.path.getsize(filePath)
-    if not checksumType:
-        checksumType = get_setting("checksum_type", "sha256")
-    if not checksum:
-        checksum = get_file_checksum(filePath, checksumType)
+    fileSize, checksumType, checksum = getSizeAndChecksum(
+        filePath=filePath,
+        fileSize=fileSize,
+        checksum=checksum,
+        checksumType=checksumType
+    )
 
     File.objects.filter(uuid=fileUUID).update(
         size=fileSize, checksum=checksum, checksumtype=checksumType
