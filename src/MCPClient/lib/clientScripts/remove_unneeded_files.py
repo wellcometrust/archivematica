@@ -28,7 +28,7 @@ def remove_file(job, target_file, file_uuid):
     }
 
     basename = os.path.basename(target_file)
-    if basename in removable_files:
+    if basename in removable_filenames:
         job.print_output(
             "Removing {filename} (UUID: {uuid})".format(
                 uuid=file_uuid, filename=basename
