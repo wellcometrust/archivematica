@@ -243,9 +243,19 @@ def call(jobs):
 
     cache_file = get_size_and_checksum_values(jobs)
 
-    with transaction.atomic():
-        with open(cache_file) as infile:
-            for job, line in zip(jobs, infile):
+    # Wellcome-specific note: we've seen issues with weird lock issues for some
+    # unknown reason, and making the atomic transaction at the job level rather
+    # than for all jobs is an attempt to fix that.
+    #
+    # See: https://github.com/wellcomecollection/platform/issues/4375
+    #
+    # The integrity of the Archivematica database isn't an enormous concern; a few
+    # extra rows in the "file UUID and checksum" table attached to a transfer that
+    # failed further down isn't a disaster.
+    #
+    with open(cache_file) as infile:
+        for job, line in zip(jobs, infile):
+            with transaction.atomic():
                 logger.info("Writing as %s.", " ".join(job.args))
                 kwargs = json.loads(line)
 
